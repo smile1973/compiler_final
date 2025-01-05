@@ -1,0 +1,24 @@
+# dune build
+# OCAMLPARAM: unset
+# Shared cache: disabled
+# Shared cache location: /home/raineko/.cache/dune/db
+# Workspace root:
+# /mnt/c/Users/USER/Desktop/workspace/113_1_compiler/final/mini-python-ocaml
+# Auto-detected concurrency: 16
+# Dune context:
+#  { name = "default"
+#  ; kind = "default"
+#  ; profile = Dev
+#  ; merlin = true
+#  ; fdo_target_exe = None
+#  ; build_dir = In_build_dir "default"
+#  ; instrument_with = []
+#  }
+$ /home/raineko/.opam/default/bin/ocamlc.opt -config > /tmp/dune_029f94_output
+$ (cd _build/default && /home/raineko/.opam/default/bin/ocamldep.opt -modules -impl typing.ml) > _build/default/.minipython.eobjs/typing.impl.d
+$ (cd _build/default && /home/raineko/.opam/default/bin/ocamlc.opt -g -bin-annot -bin-annot-occurrences -I .minipython.eobjs/byte -no-alias-deps -opaque -o .minipython.eobjs/byte/typing.cmo -c -impl typing.ml)
+$ (cd _build/default && /home/raineko/.opam/default/bin/ocamlc.opt -g -bin-annot -bin-annot-occurrences -I .minipython.eobjs/byte -no-alias-deps -opaque -o .minipython.eobjs/byte/minipython.cmo -c -impl minipython.ml)
+$ (cd _build/default && /home/raineko/.opam/default/bin/ocamlopt.opt -g -I .minipython.eobjs/byte -I .minipython.eobjs/native -intf-suffix .ml -no-alias-deps -opaque -o .minipython.eobjs/native/typing.cmx -c -impl typing.ml)
+$ (cd _build/default && /home/raineko/.opam/default/bin/ocamlopt.opt -g -I .minipython.eobjs/byte -I .minipython.eobjs/native -intf-suffix .ml -no-alias-deps -opaque -o .minipython.eobjs/native/minipython.cmx -c -impl minipython.ml)
+$ (cd _build/default && /home/raineko/.opam/default/bin/ocamlopt.opt -g -o minipython.exe .minipython.eobjs/native/ast.cmx .minipython.eobjs/native/x86_64.cmx .minipython.eobjs/native/compile.cmx .minipython.eobjs/native/parser.cmx .minipython.eobjs/native/lexer.cmx .minipython.eobjs/native/typing.cmx .minipython.eobjs/native/minipython.cmx)
+# Promoting "_build/default/minipython.exe" to "minipython.exe"
