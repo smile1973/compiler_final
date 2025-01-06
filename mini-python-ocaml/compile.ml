@@ -194,7 +194,79 @@ let rec compile_expr expr =
           
           (* 列表連接 - 待實現 *)
           label l_list ++
+          (* 列表連接 *)
+          label l_list ++
+          cmpq (imm tag_list) (reg rcx) ++
+          jne "error" ++
+          cmpq (imm tag_list) (reg rdx) ++
+          jne "error" ++
+
+          (* 取得兩個列表的長度 *)
+          pushq (reg rax) ++
+          pushq (reg r11) ++
+          movq (ind ~ofs:size_int rax) (reg r12) ++   (* 第一個列表的長度 *)
+          movq (ind ~ofs:size_int r11) (reg r13) ++   (* 第二個列表的長度 *)
           
+          (* 計算新列表的大小 *)
+          movq (reg r12) (reg rdi) ++
+          addq (reg r13) (reg rdi) ++                 (* 總長度 *)
+          pushq (reg rdi) ++                          (* 保存總長度 *)
+          imulq (imm size_int) (reg rdi) ++           (* 元素所需空間 *)
+          addq (imm (2 * size_int)) (reg rdi) ++      (* 加上 tag 和 length *)
+          
+          (* 分配新列表空間 *)
+          call "malloc" ++
+          
+          (* 設定新列表的標頭 *)
+          popq rdi ++                                 (* 恢復總長度 *)
+          movq (imm tag_list) (ind rax) ++
+          movq (reg rdi) (ind ~ofs:size_int rax) ++
+          
+          (* 複製第一個列表的元素 *)
+          movq (reg rax) (reg r14) ++                 (* r14 = 新列表 *)
+          popq r11 ++                                 (* 恢復原列表指針 *)
+          popq r15 ++                                 (* r15 = 第一個列表 *)
+          
+          (* 複製第一個列表 *)
+          xorq (reg rcx) (reg rcx) ++                 (* rcx = 0 (計數器) *)
+          label "copy_list1_loop" ++
+          cmpq (reg r12) (reg rcx) ++                (* 比較計數器和長度 *)
+          je "copy_list1_end" ++
+          
+          movq (reg rcx) (reg rdx) ++
+          imulq (imm size_int) (reg rdx) ++
+          addq (imm (2 * size_int)) (reg rdx) ++
+          movq (ind ~index:rdx r15) (reg rdi) ++     (* 載入源元素 *)
+          movq (ind ~index:rdx r14) (reg rdi) ++     (* 存入目標位置 *)
+          
+          incq (reg rcx) ++
+          jmp "copy_list1_loop" ++
+          
+          label "copy_list1_end" ++
+          
+          (* 複製第二個列表的元素 *)
+          xorq (reg rcx) (reg rcx) ++                (* rcx = 0 (計數器) *)
+          label "copy_list2_loop" ++
+          cmpq (reg r13) (reg rcx) ++               (* 比較計數器和長度 *)
+          je "copy_list2_end" ++
+          
+          movq (reg rcx) (reg rdx) ++
+          imulq (imm size_int) (reg rdx) ++
+          addq (imm (2 * size_int)) (reg rdx) ++
+          movq (ind ~index:rdx r11) (reg rdi) ++    (* 載入源元素 *)
+          
+          movq (reg r12) (reg r8) ++                (* r8 = 第一個列表長度 + 當前索引 *)
+          addq (reg rcx) (reg r8) ++
+          imulq (imm size_int) (reg r8) ++
+          addq (imm (2 * size_int)) (reg r8) ++
+          movq (reg rdi) (ind ~index:r8 r14) ++     (* 存入目標位置 *)
+          
+          incq (reg rcx) ++
+          jmp "copy_list2_loop" ++
+          
+          label "copy_list2_end" ++
+          
+          movq (reg r14) (reg rax) ++               (* 返回新列表 *)
           label l_end
 
       (* 減法 *)
@@ -337,53 +409,290 @@ let rec compile_expr expr =
           label l_end ++
           addq (imm 8) (reg rsp)    (* 清理堆疊 *)
       end
+  
+  (* 在 compile_expr 中添加列表相關操作 *)
+  | TElist elements ->
+    (* 計算需要的記憶體大小：tag + length + elements *)
+    let size = (2 + List.length elements) * size_int in
+    (* 分配記憶體 *)
+    allocate_memory size ++
+    (* 設定tag和長度 *)
+    movq (imm tag_list) (ind rax) ++
+    movq (imm (List.length elements)) (ind ~ofs:size_int rax) ++
+    (* 保存列表的基址 *)
+    pushq (reg rax) ++
+    (* 編譯並存入每個元素 *)
+    let store_elements = 
+      let cnt = ref 0 in
+      List.fold_left (fun code e ->
+        let i = !cnt in
+        incr cnt;
+        code ++
+        compile_expr e ++
+        movq (reg rax) (reg r11) ++  (* 暫存元素值 *)
+        popq rax ++                  (* 恢復列表基址 *)
+        movq (reg r11) (ind ~ofs:((i + 2) * size_int) rax) ++  (* 存入元素 *)
+        pushq (reg rax)              (* 保存列表基址用於下一輪 *)
+      ) nop elements in
+    store_elements ++
+    (* 恢復列表基址到 rax *)
+    popq rax
+
+  | TEget (lst, idx) ->
+      (* 編譯列表表達式 *)
+      compile_expr lst ++
+      pushq (reg rax) ++     (* 保存列表指標 *)
+      (* 編譯索引表達式 *)
+      compile_expr idx ++
+      (* 檢查索引型別 *)
+      movq (ind rax) (reg rcx) ++
+      cmpq (imm tag_int) (reg rcx) ++
+      jne "error" ++
+      (* 取出索引值 *)
+      movq (ind ~ofs:size_int rax) (reg rcx) ++
+      popq rax ++            (* 恢復列表指標 *)
+      (* 檢查列表型別 *)
+      movq (ind rax) (reg rdx) ++
+      cmpq (imm tag_list) (reg rdx) ++
+      jne "error" ++
+      (* 檢查索引範圍 *)
+      movq (ind ~ofs:size_int rax) (reg rdx) ++  (* 取得列表長度 *)
+      cmpq (reg rdx) (reg rcx) ++
+      jge "error" ++         (* 若索引 >= 長度，錯誤 *)
+      cmpq (imm 0) (reg rcx) ++
+      jl "error" ++          (* 若索引 < 0，錯誤 *)
+      (* 計算元素位置並載入 *)
+      imulq (imm size_int) (reg rcx) ++
+      addq (imm (2 * size_int)) (reg rcx) ++
+      movq (ind ~index:rcx rax) (reg rax)
+  (* 在 compile_expr 中添加標準函數支援 *)
+  
+  | TEcall (fn, args) ->
+    begin match fn.fn_name, args with
+    | "len", [e] ->
+        compile_expr e ++
+        movq (ind rax) (reg rcx) ++
+        (* 檢查參數型別 *)
+        cmpq (imm tag_string) (reg rcx) ++
+        je "len_string" ++
+        cmpq (imm tag_list) (reg rcx) ++
+        je "len_list" ++
+        jmp "error" ++
+        
+        label "len_string" ++
+        movq (ind ~ofs:size_int rax) (reg rsi) ++
+        jmp "len_end" ++
+        
+        label "len_list" ++
+        movq (ind ~ofs:size_int rax) (reg rsi) ++
+        
+        label "len_end" ++
+        (* 建立整數返回值 *)
+        create_int 0 ++
+        movq (reg rsi) (ind ~ofs:size_int rax)
+
+    | "range", [e] ->
+        (* 計算範圍大小 *)
+        compile_expr e ++
+        movq (ind rax) (reg rcx) ++
+        cmpq (imm tag_int) (reg rcx) ++
+        jne "error" ++
+        movq (ind ~ofs:size_int rax) (reg rcx) ++  (* 取得 n *)
+        (* 檢查範圍 >= 0 *)
+        cmpq (imm 0) (reg rcx) ++
+        jl "error" ++
+        (* 分配列表空間 *)
+        pushq (reg rcx) ++  (* 保存 n *)
+        movq (reg rcx) (reg rdi) ++
+        imulq (imm size_int) (reg rdi) ++
+        addq (imm (2 * size_int)) (reg rdi) ++
+        call "malloc" ++
+        popq rcx ++        (* 恢復 n *)
+        (* 設定列表標頭 *)
+        movq (imm tag_list) (ind rax) ++
+        movq (reg rcx) (ind ~ofs:size_int rax) ++
+        (* 設定列表元素 *)
+        pushq (reg rax) ++  (* 保存列表基址 *)
+        xorq (reg rdx) (reg rdx) ++  (* 計數器 = 0 *)
+        label "range_loop" ++
+        cmpq (reg rcx) (reg rdx) ++
+        je "range_end" ++
+        (* 建立整數物件 *)
+        movq (reg rdx) (reg rdi) ++
+        pushq (reg rcx) ++
+        pushq (reg rdx) ++
+        create_int 0 ++
+        movq (reg rdi) (ind ~ofs:size_int rax) ++
+        (* 存入列表 *)
+        movq (reg rax) (reg rdi) ++  (* 暫存整數物件 *)
+        popq rdx ++
+        popq rcx ++
+        popq rax ++        (* 恢復列表基址 *)
+        pushq (reg rax) ++ (* 再次保存列表基址 *)
+        (* 計算元素位置並存入 *)
+        pushq (reg rcx) ++
+        movq (reg rdx) (reg rcx) ++
+        imulq (imm size_int) (reg rcx) ++
+        addq (imm (2 * size_int)) (reg rcx) ++
+        movq (reg rdi) (ind ~index:rcx rax) ++
+        popq rcx ++
+        incq (reg rdx) ++
+        jmp "range_loop" ++
+        label "range_end" ++
+        popq rax
+
+    | "list", [e] ->
+        (* list(range(n)) 前面已經實作過了 *)
+        compile_expr e
+
+    | _ -> 
+      (* 一般函數呼叫 *)
+      let push_args = List.fold_left (fun code e -> 
+        code ++
+        compile_expr e ++
+        pushq (reg rax)
+      ) nop (List.rev args) in
+      push_args ++
+      call fn.fn_name ++
+      (* 清理參數 *)
+      addq (imm (8 * List.length args)) (reg rsp)
+    end
+  
   | _ -> failwith "error" end
     
 
-and compare_values op =
-  let l_true = new_label () in
-  let l_end = new_label () in
-  (* 先檢查兩個值的類型是否相同 *)
-  movq (ind rax) (reg rcx) ++
-  movq (ind r11) (reg rdx) ++
-  cmpq (reg rcx) (reg rdx) ++
-  jne l_end ++  (* 如果類型不同，返回false *)
-  
-  (* 根據類型進行不同的比較 *)
-  begin match op with
-  | Beq | Bneq -> 
-      (* 所有類型都可以用 == 和 != 比較 *)
-      movq (ind ~ofs:size_int rax) (reg rsi) ++
-      movq (ind ~ofs:size_int r11) (reg rdi) ++
-      cmpq (reg rdi) (reg rsi) ++
-      begin match op with
-      | Beq -> je l_true
-      | Bneq -> jne l_true
-      | _ -> nop
-      end
-  | _ ->
-      (* 其他比較運算只支援數值類型 *)
-      cmpq (imm tag_int) (reg rcx) ++
-      jne l_end ++
-      movq (ind ~ofs:size_int rax) (reg rsi) ++
-      movq (ind ~ofs:size_int r11) (reg rdi) ++
-      cmpq (reg rdi) (reg rsi) ++
-      begin match op with
-      | Blt -> jl l_true
-      | Ble -> jle l_true
-      | Bgt -> jg l_true
-      | Bge -> jge l_true
-      | _ -> nop
-      end
-  end ++
-  create_bool false ++  (* 預設返回 false *)
-  jmp l_end ++
-  label l_true ++
-  create_bool true ++
-  label l_end
+  and compare_values op =
+    let l_true = new_label () in
+    let l_false = new_label () in
+    let l_end = new_label () in
+    
+    (* 先檢查兩個值的類型是否相同 *)
+    movq (ind rax) (reg rcx) ++  (* 第一個值的類型 *)
+    movq (ind r11) (reg rdx) ++ (* 第二個值的類型 *)
+    
+    (* 對於 == 和 != ，允許不同類型之間比較 *)
+    begin match op with
+    | Beq | Bneq ->
+        cmpq (reg rcx) (reg rdx) ++
+        jne l_false  (* 如果類型不同，直接判定不相等 *)
+    | _ ->
+        cmpq (reg rcx) (reg rdx) ++
+        jne "error"  (* 其他比較操作要求類型相同 *)
+    end ++
+    
+    (* 根據類型選擇比較方式 *)
+    let l_str = new_label () in
+    let l_list = new_label () in
+    let l_bool = new_label () in
+    
+    (* 先檢查是不是布林值 *)
+    cmpq (imm tag_bool) (reg rcx) ++
+    je l_bool ++
+    
+    (* 再檢查是不是整數 *)
+    cmpq (imm tag_int) (reg rcx) ++
+    je "compare_int" ++
+    
+    (* 再檢查是不是字串 *)
+    cmpq (imm tag_string) (reg rcx) ++
+    je l_str ++
+    
+    (* 最後檢查是不是列表 *)
+    cmpq (imm tag_list) (reg rcx) ++
+    je l_list ++
+    
+    jmp "error" ++  (* 不支援的類型 *)
+    
+    (* 布林值比較：轉成整數比較 *)
+    label l_bool ++
+    movq (ind ~ofs:size_int rax) (reg rsi) ++
+    movq (ind ~ofs:size_int r11) (reg rdi) ++
+    jmp "compare_int" ++
+    
+    (* 整數比較 *)
+    label "compare_int" ++
+    movq (ind ~ofs:size_int rax) (reg rsi) ++
+    movq (ind ~ofs:size_int r11) (reg rdi) ++
+    cmpq (reg rdi) (reg rsi) ++
+    begin match op with
+    | Beq -> je l_true
+    | Bneq -> jne l_true
+    | Blt -> jl l_true
+    | Ble -> jle l_true
+    | Bgt -> jg l_true
+    | Bge -> jge l_true
+    end ++
+    jmp l_false ++
+    
+    (* 字串比較 *)
+    label l_str ++
+    pushq (reg rax) ++
+    pushq (reg r11) ++
+    leaq (ind ~ofs:(2 * size_int) rax) (rdi) ++
+    leaq (ind ~ofs:(2 * size_int) r11) (rsi) ++
+    call "strcmp" ++
+    popq r11 ++
+    popq rcx ++
+    (* strcmp 返回: <0 if s1<s2, 0 if s1=s2, >0 if s1>s2 *)
+    begin match op with
+    | Beq -> cmpq (imm 0) (reg rax) ++ je l_true
+    | Bneq -> cmpq (imm 0) (reg rax) ++ jne l_true
+    | Blt -> cmpq (imm 0) (reg rax) ++ jl l_true
+    | Ble -> cmpq (imm 0) (reg rax) ++ jle l_true
+    | Bgt -> cmpq (imm 0) (reg rax) ++ jg l_true
+    | Bge -> cmpq (imm 0) (reg rax) ++ jge l_true
+    end ++
+    jmp l_false ++
+    
+    (* 列表比較 *)
+    label l_list ++
+    (* 先比較長度 *)
+    movq (ind ~ofs:size_int rax) (reg rsi) ++  (* 第一個列表長度 *)
+    movq (ind ~ofs:size_int r11) (reg rdi) ++  (* 第二個列表長度 *)
+    
+    (* 如果長度不同且是等於/不等於比較 *)
+    begin match op with
+    | Beq | Bneq ->
+        cmpq (reg rdi) (reg rsi) ++
+        jne l_false
+    | Blt | Ble ->
+        cmpq (reg rdi) (reg rsi) ++
+        jl l_true ++
+        jg l_false
+    | Bgt | Bge ->
+        cmpq (reg rdi) (reg rsi) ++
+        jg l_true ++
+        jl l_false
+    end ++
+    
+    (* 到這裡，要麼是長度相同，要麼是需要進一步比較元素 *)
+    pushq (reg rax) ++  (* 保存列表指針 *)
+    pushq (reg r11) ++
+    call "compare_lists" ++  (* 呼叫輔助函數比較列表元素 *)
+    popq r11 ++
+    popq rcx ++
+    
+    begin match op with
+    | Beq -> cmpq (imm 0) (reg rax) ++ je l_true
+    | Bneq -> cmpq (imm 0) (reg rax) ++ jne l_true
+    | Blt -> cmpq (imm 0) (reg rax) ++ jl l_true
+    | Ble -> cmpq (imm 0) (reg rax) ++ jle l_true
+    | Bgt -> cmpq (imm 0) (reg rax) ++ jg l_true
+    | Bge -> cmpq (imm 0) (reg rax) ++ jge l_true
+    end ++
+    
+    (* 產生結果 *)
+    label l_false ++
+    create_bool false ++
+    jmp l_end ++
+    
+    label l_true ++
+    create_bool true ++
+    
+    label l_end
 
-(* 測試值是否為假的函數 *)
-and test_value_false =
+  (* 測試值是否為假的函數 *)
+  and test_value_false =
   let l_true = new_label () in
   let l_false = new_label () in
   let l_end = new_label () in
@@ -409,3 +718,404 @@ and test_value_false =
   movq (imm 0) (reg rax) ++
   
   label l_end
+
+(* 需要在程式開頭加入 label compare_lists 的相關代碼 *)
+let compare_lists_code = 
+  label "compare_lists" ++
+  (* 保存 caller 的暫存器 *)
+  pushq (reg rbp) ++
+  movq (reg rsp) (reg rbp) ++
+  pushq (reg r12) ++  (* 保存第一個列表 *)
+  pushq (reg r13) ++  (* 保存第二個列表 *)
+  pushq (reg r14) ++  (* 當前索引 *)
+  pushq (reg r15) ++  (* 列表長度 *)
+
+  (* 取得兩個列表的參數 *)
+  movq (reg rdi) (reg r12) ++  (* 第一個列表 *)
+  movq (reg rsi) (reg r13) ++  (* 第二個列表 *)
+
+  (* 取得列表長度(兩個列表長度一樣，取任一個) *)
+  movq (ind ~ofs:size_int r12) (reg r15) ++
+  
+  (* 初始化索引 *)
+  xorq (reg r14) (reg r14) ++  (* r14 = 0 *)
+
+  (* 比較循環開始 *)
+  label "compare_lists_loop" ++
+  
+  (* 檢查是否已經比較完所有元素 *)
+  cmpq (reg r14) (reg r15) ++
+  je "compare_lists_equal" ++  (* 如果全部比較完且相等，返回0 *)
+
+  (* 取得兩個列表當前元素的指針 *)
+  movq (reg r14) (reg rcx) ++
+  imulq (imm size_int) (reg rcx) ++
+  addq (imm (2 * size_int)) (reg rcx) ++  (* 跳過 tag 和 length *)
+
+  (* 載入當前元素 *)
+  movq (ind ~index:rcx r12) (reg rdi) ++  (* 第一個列表的元素 *)
+  movq (ind ~index:rcx r13) (reg rsi) ++  (* 第二個列表的元素 *)
+
+  (* 比較兩個元素 *)
+  pushq (reg r14) ++  (* 保存當前狀態 *)
+  pushq (reg r15) ++
+  pushq (reg r12) ++
+  pushq (reg r13) ++
+
+  (* 調用遞迴比較 *)
+  movq (reg rdi) (reg rax) ++
+  movq (reg rsi) (reg r11) ++
+  (* 這裡用到之前實作的 compare_values *)
+  movq (imm 0) (reg rax) ++  (* 先假設相等 *)
+  
+  movq (ind rdi) (reg rcx) ++  (* 取得第一個元素類型 *)
+  movq (ind rsi) (reg rdx) ++  (* 取得第二個元素類型 *)
+  
+  (* 如果類型不同，不相等 *)
+  cmpq (reg rcx) (reg rdx) ++
+  jne "compare_lists_restore" ++
+
+  (* 根據類型進行比較 *)
+  cmpq (imm tag_int) (reg rcx) ++
+  je "compare_lists_int" ++
+  cmpq (imm tag_string) (reg rcx) ++
+  je "compare_lists_string" ++
+  cmpq (imm tag_list) (reg rcx) ++
+  je "compare_lists_recurse" ++
+  (* 其他類型暫不支援 *)
+  jmp "compare_lists_restore" ++
+
+  (* 整數比較 *)
+  label "compare_lists_int" ++
+  movq (ind ~ofs:size_int rdi) (reg rax) ++
+  subq (ind ~ofs:size_int rsi) (reg rax) ++
+  jmp "compare_lists_restore" ++
+
+  (* 字串比較 *)
+  label "compare_lists_string" ++
+  pushq (reg rdi) ++
+  pushq (reg rsi) ++
+  leaq (ind ~ofs:(2 * size_int) rdi) (rdi) ++
+  leaq (ind ~ofs:(2 * size_int) rsi) (rsi) ++
+  call "strcmp" ++
+  popq rsi ++
+  popq rdi ++
+  jmp "compare_lists_restore" ++
+
+  (* 遞迴比較列表 *)
+  label "compare_lists_recurse" ++
+  pushq (reg rdi) ++
+  pushq (reg rsi) ++
+  call "compare_lists" ++
+  popq rsi ++
+  popq rdi ++
+
+  (* 恢復暫存器並檢查比較結果 *)
+  label "compare_lists_restore" ++
+  popq r13 ++
+  popq r12 ++
+  popq r15 ++
+  popq r14 ++
+
+  (* 檢查比較結果 *)
+  cmpq (imm 0) (reg rax) ++
+  jne "compare_lists_end" ++  (* 如果不相等，直接返回結果 *)
+
+  (* 元素相等，繼續比較下一個 *)
+  incq (reg r14) ++
+  jmp "compare_lists_loop" ++
+
+  (* 所有元素都相等 *)
+  label "compare_lists_equal" ++
+  xorq (reg rax) (reg rax) ++  (* 返回 0 *)
+
+  (* 結束比較 *)
+  label "compare_lists_end" ++
+  popq (r15) ++
+  popq (r14) ++
+  popq (r13) ++
+  popq (r12) ++
+  movq (reg rbp) (reg rsp) ++
+  popq (rbp) ++
+  ret
+
+let stack_top n = 
+  ind ~ofs:(8 * n) rsp
+  
+(* 輔助函數：列表元素輸出 *)
+let print_element_code =
+  label "print_element" ++
+  pushq (reg rbp) ++
+  movq (reg rsp) (reg rbp) ++
+  
+  (* 檢查值的類型並輸出 *)
+  movq (ind rdi) (reg rsi) ++  (* 獲取類型標籤 *)
+  
+  (* 根據類型處理 *)
+  cmpq (imm tag_none) (reg rsi) ++
+  je "print_element_none" ++
+  cmpq (imm tag_bool) (reg rsi) ++
+  je "print_element_bool" ++
+  cmpq (imm tag_string) (reg rsi) ++
+  je "print_element_string" ++
+  cmpq (imm tag_list) (reg rsi) ++
+  je "print_element_list" ++
+  
+  (* 默認當作整數處理 *)
+  movq (ind ~ofs:size_int rdi) (reg rsi) ++
+  movq (ilab "fmt_int") (reg rdi) ++
+  movq (imm 0) (reg rax) ++
+  call "printf" ++
+  jmp "print_element_end" ++
+  
+  (* None *)
+  label "print_element_none" ++
+  movq (ilab "str_none") (reg rsi) ++
+  movq (ilab "fmt_string") (reg rdi) ++
+  movq (imm 0) (reg rax) ++
+  call "printf" ++
+  jmp "print_element_end" ++
+  
+  (* Bool *)
+  label "print_element_bool" ++
+  movq (ind ~ofs:size_int rdi) (reg rdx) ++
+  cmpq (imm 0) (reg rdx) ++
+  je "print_element_false" ++
+  movq (ilab "str_true") (reg rsi) ++
+  jmp "print_element_do_bool" ++
+  label "print_element_false" ++
+  movq (ilab "str_false") (reg rsi) ++
+  label "print_element_do_bool" ++
+  movq (ilab "fmt_string") (reg rdi) ++
+  movq (imm 0) (reg rax) ++
+  call "printf" ++
+  jmp "print_element_end" ++
+  
+  (* String *)
+  label "print_element_string" ++
+  leaq (ind ~ofs:(2 * size_int) rdi) (rsi) ++
+  movq (ilab "fmt_string") (reg rdi) ++
+  movq (imm 0) (reg rax) ++
+  call "printf" ++
+  jmp "print_element_end" ++
+  
+  (* List - 遞迴輸出 *)
+  label "print_element_list" ++
+  call "print_list" ++
+  
+  label "print_element_end" ++
+  movq (reg rbp) (reg rsp) ++
+  popq rbp ++
+  ret 
+
+let rec compile_stmt = function
+(* print 語句：編譯表達式，然後根據型別進行對應的輸出 *)
+  | TSprint e ->
+      let print_code = 
+        compile_expr e ++
+        (* 保存要輸出的值 *)
+        pushq (reg rax) ++
+        (* 檢查型別 *)
+        movq (ind rax) (reg rsi) ++
+
+        (* 根據型別跳轉到對應的處理代碼 *)
+        let l_string = new_label () in
+        let l_bool = new_label () in
+        let l_list = new_label () in
+        let l_end = new_label () in
+
+        cmpq (imm tag_none) (reg rsi) ++
+        je l_string ++
+        cmpq (imm tag_bool) (reg rsi) ++
+        je l_bool ++
+        cmpq (imm tag_list) (reg rsi) ++
+        je l_list ++
+
+        (* 整數輸出 *)
+        movq (ind ~ofs:size_int rax) (reg rsi) ++
+        movq (ilab "fmt_int") (reg rdi) ++
+        movq (imm 0) (reg rax) ++
+        call "printf" ++
+        jmp l_end ++
+
+        (* 字串輸出 *)
+        label l_string ++
+        leaq (ind ~ofs:(2 * size_int) rax) (rsi) ++
+        movq (ilab "fmt_string") (reg rdi) ++
+        movq (imm 0) (reg rax) ++
+        call "printf" ++
+        jmp l_end ++
+
+        (* 布林輸出 *)
+        label l_bool ++
+        movq (ind ~ofs:size_int rax) (reg r11) ++
+        cmpq (imm 0) (reg r11) ++
+        je "print_false" ++
+        movq (ilab "str_true") (reg rsi) ++
+        jmp "print_bool" ++
+        label "print_false" ++
+        movq (ilab "str_false") (reg rsi) ++
+        label "print_bool" ++
+        movq (ilab "fmt_string") (reg rdi) ++
+        movq (imm 0) (reg rax) ++
+        call "printf" ++
+        jmp l_end ++
+
+        (* 列表輸出 *)
+        label l_list ++
+        (* 印出左中括號 *)
+        movq (ilab "str_lbracket") (reg rdi) ++
+        call "puts" ++
+        (* 取得列表長度 *)
+        movq (ind ~ofs:size_int rax) (reg r12) ++  (* r12 = 長度 *)
+        xorq (reg r13) (reg r13) ++                (* r13 = 當前索引 *)
+
+        label "print_list_loop" ++
+        cmpq (reg r13) (reg r12) ++
+        je "print_list_end" ++
+        
+        (* 印出元素 *)
+        movq (reg r13) (reg rcx) ++
+        imulq (imm size_int) (reg rcx) ++
+        addq (imm (2 * size_int)) (reg rcx) ++
+        pushq (reg rax) ++
+        pushq (reg r12) ++
+        pushq (reg r13) ++
+        movq (ind ~index:rcx rax) (reg rdi) ++
+        call "print_element" ++  (* 需要另外實作這個函數 *)
+        popq r13 ++
+        popq r12 ++
+        popq rax ++
+
+        (* 如果不是最後一個元素，印出逗號 *)
+        incq (reg r13) ++
+        cmpq (reg r13) (reg r12) ++
+        je "print_list_loop" ++
+        movq (ilab "str_comma") (reg rdi) ++
+        call "printf" ++
+        jmp "print_list_loop" ++
+
+        label "print_list_end" ++
+        (* 印出右中括號 *)
+        movq (ilab "str_rbracket") (reg rdi) ++
+        call "puts" ++
+
+        (* 印出換行 *)
+        label l_end ++
+        movq (imm 10) (reg rdi) ++  (* ASCII code for '\n' *)
+        call "putchar" ++
+        (* 恢復值 *)
+        popq rax in
+      print_code
+
+  (* 變數賦值 *)
+  | TSassign (v, e) ->
+      compile_expr e ++
+      movq (reg rax) (ind ~ofs:v.v_ofs rbp)
+
+  (* if 條件語句 *)
+  | TSif (e, s1, s2) ->
+      let l_else = new_label () in
+      let l_end = new_label () in
+      compile_expr e ++
+      test_value_false ++
+      jne l_else ++
+      compile_stmt s1 ++
+      jmp l_end ++
+      label l_else ++
+      compile_stmt s2 ++
+      label l_end
+
+  (* 語句塊 *)
+  | TSblock sl ->
+      List.fold_left (fun code s -> 
+        code ++ compile_stmt s
+      ) nop sl
+
+  (* for 迴圈 *)
+  | TSfor (v, e, s) ->
+      let l_start = new_label () in
+      let l_end = new_label () in
+      (* 編譯列表表達式 *)
+      compile_expr e ++
+      (* 檢查是否是列表 *)
+      movq (ind rax) (reg rcx) ++
+      cmpq (imm tag_list) (reg rcx) ++
+      jne "error" ++
+      (* 保存列表指針和獲取長度 *)
+      pushq (reg rax) ++
+      movq (ind ~ofs:size_int rax) (reg r12) ++  (* r12 = 長度 *)
+      xorq (reg r13) (reg r13) ++                (* r13 = 當前索引 *)
+      (* 迴圈開始 *)
+      label l_start ++
+      (* 檢查是否結束 *)
+      cmpq (reg r13) (reg r12) ++
+      je l_end ++
+      (* 取得當前元素 *)
+      movq (reg r13) (reg rcx) ++
+      imulq (imm size_int) (reg rcx) ++
+      addq (imm (2 * size_int)) (reg rcx) ++
+      movq (stack_top 0) (reg rax) ++
+      movq (ind ~index:rcx rax) (reg rdx) ++
+      (* 賦值給迭代變數 *)
+      movq (reg rdx) (ind ~ofs:v.v_ofs rbp) ++
+      (* 編譯循環體 *)
+      pushq (reg r12) ++
+      pushq (reg r13) ++
+      compile_stmt s ++
+      popq r13 ++
+      popq r12 ++
+      (* 增加索引並繼續 *)
+      incq (reg r13) ++
+      jmp l_start ++
+      label l_end ++
+      addq (imm 8) (reg rsp)  (* 清理堆疊 *)
+
+  (* return 語句 *)
+  | TSreturn e ->
+      compile_expr e ++
+      movq (reg rbp) (reg rsp) ++
+      popq rbp ++
+      ret
+
+  (* 表達式求值 *)
+  | TSeval e ->
+      compile_expr e
+      
+  | _ -> failwith "f"
+
+let rec compile_stmt = function
+  | TSprint e -> ...
+  | TSassign (v, e) -> ...
+  | TSif (e, s1, s2) -> ...
+  | TSblock sl -> ...
+  | TSfor (v, e, s) -> ...
+  | TSreturn e -> ...
+  | TSeval e -> ...
+    
+(* 獨立的函數定義處理函數 *)
+let compile_def (fn, body) =
+  let setup_params =
+    List.fold_left (fun code (i, param) ->
+      let param_offset = i * 8 in
+      code ++
+      movq (ind ~ofs:(16 + param_offset) rbp) (reg rax) ++  (* 16 = ret addr + old rbp *)
+      movq (reg rax) (ind ~ofs:(-(8 + param_offset)) rbp)
+    ) nop (List.mapi (fun i p -> (i, p)) fn.fn_params) in
+
+  label fn.fn_name ++
+  pushq (reg rbp) ++
+  movq (reg rsp) (reg rbp) ++
+  (* 為局部變數預留空間 *)
+  subq (imm (8 * List.length fn.fn_params)) (reg rsp) ++
+  (* 設置參數 *)
+  setup_params ++
+  (* 編譯函數體 *)
+  compile_stmt body ++
+  (* 如果沒有明確的return，返回None *)
+  create_none ++
+  (* 清理堆疊框架並返回 *)
+  movq (reg rbp) (reg rsp) ++
+  popq rbp ++
+  ret
+
