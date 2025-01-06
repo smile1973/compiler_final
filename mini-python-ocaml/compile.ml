@@ -621,6 +621,7 @@ let rec compile_expr expr =
     | Ble -> jle l_true
     | Bgt -> jg l_true
     | Bge -> jge l_true
+    | _ -> jmp "error"
     end ++
     jmp l_false ++
     
@@ -641,6 +642,7 @@ let rec compile_expr expr =
     | Ble -> cmpq (imm 0) (reg rax) ++ jle l_true
     | Bgt -> cmpq (imm 0) (reg rax) ++ jg l_true
     | Bge -> cmpq (imm 0) (reg rax) ++ jge l_true
+    | _ -> jmp "error"
     end ++
     jmp l_false ++
     
@@ -663,6 +665,7 @@ let rec compile_expr expr =
         cmpq (reg rdi) (reg rsi) ++
         jg l_true ++
         jl l_false
+    | _ -> jmp "error"
     end ++
     
     (* 到這裡，要麼是長度相同，要麼是需要進一步比較元素 *)
@@ -679,6 +682,7 @@ let rec compile_expr expr =
     | Ble -> cmpq (imm 0) (reg rax) ++ jle l_true
     | Bgt -> cmpq (imm 0) (reg rax) ++ jg l_true
     | Bge -> cmpq (imm 0) (reg rax) ++ jge l_true
+    | _ -> jmp "error"
     end ++
     
     (* 產生結果 *)
@@ -911,104 +915,72 @@ let print_element_code =
 let rec compile_stmt = function
 (* print 語句：編譯表達式，然後根據型別進行對應的輸出 *)
   | TSprint e ->
-      let print_code = 
-        compile_expr e ++
-        (* 保存要輸出的值 *)
-        pushq (reg rax) ++
-        (* 檢查型別 *)
-        movq (ind rax) (reg rsi) ++
+    compile_expr e ++  (* 計算表達式的值，結果在 rax *)
+    (* 讀取標籤類型並判斷 *)
+    movq (ind rax) (reg rsi) ++
+    cmpq (imm tag_none) (reg rsi) ++
+    je "print_none_value" ++
+    cmpq (imm tag_bool) (reg rsi) ++
+    je "print_bool_value" ++
+    cmpq (imm tag_list) (reg rsi) ++
+    je "print_list_value" ++
+    cmpq (imm tag_int) (reg rsi) ++
+    je "print_int_value" ++
+    jmp "print_string_value" ++
 
-        (* 根據型別跳轉到對應的處理代碼 *)
-        let l_string = new_label () in
-        let l_bool = new_label () in
-        let l_list = new_label () in
-        let l_end = new_label () in
+    (* Print int *)
+    label "print_int_value" ++
+    pushq (reg rax) ++            (* 保存整個對象指針 *)
+    movq (ind ~ofs:size_int rax) (reg rsi) ++  (* 獲取整數值 *)
+    movq (ilab "fmt_int") (reg rdi) ++
+    xorq (reg rax) (reg rax) ++   (* printf needs rax = 0 *)
+    call "printf" ++
+    popq rax ++                   (* 恢復對象指針 *)
+    jmp "print_end_value" ++
 
-        cmpq (imm tag_none) (reg rsi) ++
-        je l_string ++
-        cmpq (imm tag_bool) (reg rsi) ++
-        je l_bool ++
-        cmpq (imm tag_list) (reg rsi) ++
-        je l_list ++
+    (* Print string *)
+    label "print_string_value" ++
+    leaq (ind ~ofs:(2 * size_int) rax) (rsi) ++
+    movq (ilab "fmt_string") (reg rdi) ++
+    xorq (reg rax) (reg rax) ++
+    call "printf" ++
+    jmp "print_end_value" ++
 
-        (* 整數輸出 *)
-        movq (ind ~ofs:size_int rax) (reg rsi) ++
-        movq (ilab "fmt_int") (reg rdi) ++
-        movq (imm 0) (reg rax) ++
-        call "printf" ++
-        jmp l_end ++
+    (* Print None *)
+    label "print_none_value" ++
+    movq (ilab "str_none") (reg rsi) ++
+    movq (ilab "fmt_string") (reg rdi) ++
+    xorq (reg rax) (reg rax) ++
+    call "printf" ++
+    jmp "print_end_value" ++
 
-        (* 字串輸出 *)
-        label l_string ++
-        leaq (ind ~ofs:(2 * size_int) rax) (rsi) ++
-        movq (ilab "fmt_string") (reg rdi) ++
-        movq (imm 0) (reg rax) ++
-        call "printf" ++
-        jmp l_end ++
+    (* Print bool *)
+    label "print_bool_value" ++
+    movq (ind ~ofs:size_int rax) (reg r11) ++
+    cmpq (imm 0) (reg r11) ++
+    je "print_false_value" ++
+    movq (ilab "str_true") (reg rsi) ++
+    jmp "print_bool_str_value" ++
+    label "print_false_value" ++
+    movq (ilab "str_false") (reg rsi) ++
+    label "print_bool_str_value" ++
+    movq (ilab "fmt_string") (reg rdi) ++
+    xorq (reg rax) (reg rax) ++
+    call "printf" ++
+    jmp "print_end_value" ++
 
-        (* 布林輸出 *)
-        label l_bool ++
-        movq (ind ~ofs:size_int rax) (reg r11) ++
-        cmpq (imm 0) (reg r11) ++
-        je "print_false" ++
-        movq (ilab "str_true") (reg rsi) ++
-        jmp "print_bool" ++
-        label "print_false" ++
-        movq (ilab "str_false") (reg rsi) ++
-        label "print_bool" ++
-        movq (ilab "fmt_string") (reg rdi) ++
-        movq (imm 0) (reg rax) ++
-        call "printf" ++
-        jmp l_end ++
+    (* Print list *)
+    label "print_list_value" ++
+    movq (reg rax) (reg rdi) ++
+    call "print_list" ++          (* 呼叫外部的 print_list 函數 *)
 
-        (* 列表輸出 *)
-        label l_list ++
-        (* 印出左中括號 *)
-        movq (ilab "str_lbracket") (reg rdi) ++
-        call "puts" ++
-        (* 取得列表長度 *)
-        movq (ind ~ofs:size_int rax) (reg r12) ++  (* r12 = 長度 *)
-        xorq (reg r13) (reg r13) ++                (* r13 = 當前索引 *)
-
-        label "print_list_loop" ++
-        cmpq (reg r13) (reg r12) ++
-        je "print_list_end" ++
-        
-        (* 印出元素 *)
-        movq (reg r13) (reg rcx) ++
-        imulq (imm size_int) (reg rcx) ++
-        addq (imm (2 * size_int)) (reg rcx) ++
-        pushq (reg rax) ++
-        pushq (reg r12) ++
-        pushq (reg r13) ++
-        movq (ind ~index:rcx rax) (reg rdi) ++
-        call "print_element" ++  (* 需要另外實作這個函數 *)
-        popq r13 ++
-        popq r12 ++
-        popq rax ++
-
-        (* 如果不是最後一個元素，印出逗號 *)
-        incq (reg r13) ++
-        cmpq (reg r13) (reg r12) ++
-        je "print_list_loop" ++
-        movq (ilab "str_comma") (reg rdi) ++
-        call "printf" ++
-        jmp "print_list_loop" ++
-
-        label "print_list_end" ++
-        (* 印出右中括號 *)
-        movq (ilab "str_rbracket") (reg rdi) ++
-        call "puts" ++
-
-        (* 印出換行 *)
-        label l_end ++
-        movq (imm 10) (reg rdi) ++  (* ASCII code for '\n' *)
-        call "putchar" ++
-        (* 恢復值 *)
-        popq rax in
-      print_code
-
-  (* 變數賦值 *)
+    (* Print newline and cleanup *)
+    label "print_end_value" ++
+    movq (imm 10) (reg rdi) ++
+    call "putchar" ++
+    movq (imm 0) (reg rax)
+  
+    (* 變數賦值 *)
   | TSassign (v, e) ->
       compile_expr e ++
       movq (reg rax) (ind ~ofs:v.v_ofs rbp)
@@ -1084,15 +1056,6 @@ let rec compile_stmt = function
       
   | _ -> failwith "f"
 
-let rec compile_stmt = function
-  | TSprint e -> ...
-  | TSassign (v, e) -> ...
-  | TSif (e, s1, s2) -> ...
-  | TSblock sl -> ...
-  | TSfor (v, e, s) -> ...
-  | TSreturn e -> ...
-  | TSeval e -> ...
-    
 (* 獨立的函數定義處理函數 *)
 let compile_def (fn, body) =
   let setup_params =
@@ -1119,3 +1082,171 @@ let compile_def (fn, body) =
   popq rbp ++
   ret
 
+let error_handlers =
+  label "error" ++
+  movq (ilab "error_msg") (reg rdi) ++
+  call "puts" ++
+  movq (imm 1) (reg rdi) ++
+  call "exit" ++
+
+  label "error_div_by_zero" ++
+  movq (ilab "div_zero_msg") (reg rdi) ++
+  call "puts" ++
+  movq (imm 1) (reg rdi) ++
+  call "exit" ++
+
+  label "error_type" ++
+  movq (ilab "type_error_msg") (reg rdi) ++
+  call "puts" ++
+  movq (imm 1) (reg rdi) ++
+  call "exit"
+
+let file ?debug:(b=false) (p: Ast.tfile) : X86_64.program =
+  debug := b;
+  
+  (* 初始化 *)
+  string_literals := [];
+  string_counter := 0;
+
+  (* 生成數據段：包含錯誤訊息和字串常量 *)
+  let data_section =
+    label "error_msg" ++ string "runtime error" ++
+    label "div_zero_msg" ++ string "division by zero" ++
+    label "type_error_msg" ++ string "type error" ++
+    label "fmt_int" ++ string "%d" ++
+    label "fmt_bool" ++ string "%s" ++
+    label "fmt_string" ++ string "%s" ++
+    label "str_true" ++ string "True" ++
+    label "str_false" ++ string "False" ++
+    label "str_none" ++ string "None" ++
+    label "str_lbracket" ++ string "[" ++
+    label "str_rbracket" ++ string "]" ++
+    label "str_comma" ++ string ", " in
+
+  (* 運行時錯誤處理程式碼 *)
+  let error_code =
+    label "error" ++
+    movq (ilab "error_msg") (reg rdi) ++
+    call "puts" ++
+    movq (imm 1) (reg rdi) ++
+    call "exit" ++
+
+    label "error_div_by_zero" ++
+    movq (ilab "div_zero_msg") (reg rdi) ++
+    call "puts" ++
+    movq (imm 1) (reg rdi) ++
+    call "exit" ++
+
+    label "error_type" ++
+    movq (ilab "type_error_msg") (reg rdi) ++
+    call "puts" ++
+    movq (imm 1) (reg rdi) ++
+    call "exit" in
+
+  (* 列表輸出函數 *)
+  let print_list_code =
+    label "print_list" ++
+    pushq (reg rbp) ++
+    movq (reg rsp) (reg rbp) ++
+    
+    (* 印出左中括號 *)
+    movq (ilab "str_lbracket") (reg rdi) ++
+    call "puts" ++
+    
+    (* 取得列表長度 *)
+    movq (ind ~ofs:size_int rdi) (reg r12) ++  (* r12 = 長度 *)
+    xorq (reg r13) (reg r13) ++                (* r13 = 當前索引 *)
+
+    label "print_list_inner_loop" ++
+    cmpq (reg r13) (reg r12) ++
+    je "print_list_inner_end" ++
+    
+    (* 印出元素 *)
+    movq (reg r13) (reg rcx) ++
+    imulq (imm size_int) (reg rcx) ++
+    addq (imm (2 * size_int)) (reg rcx) ++
+    pushq (reg rdi) ++
+    pushq (reg r12) ++
+    pushq (reg r13) ++
+    movq (ind ~index:rcx rdi) (reg rdi) ++
+    call "print_element" ++
+    popq r13 ++
+    popq r12 ++
+    popq rdi ++
+
+    (* 處理逗號 *)
+    incq (reg r13) ++
+    cmpq (reg r13) (reg r12) ++
+    je "print_list_inner_end" ++
+    pushq (reg rdi) ++
+    movq (ilab "str_comma") (reg rdi) ++
+    call "printf" ++
+    popq rdi ++
+    jmp "print_list_inner_loop" ++
+
+    label "print_list_inner_end" ++
+    movq (ilab "str_rbracket") (reg rdi) ++
+    call "puts" ++
+
+    leave ++
+    ret in
+
+  (* 分割主程式和函數定義 *)
+  let (main_fn, main_stmt) = List.hd p in
+  let function_defs = List.tl p in
+
+  (* 編譯函數定義 *)
+  let functions_code = List.fold_left (fun acc (fn, body) ->
+    acc ++ compile_def (fn, body)
+  ) nop function_defs in
+
+  (* 生成所有字串常量 *)
+  let const_strings = 
+    List.fold_left (fun acc (label_name, str) ->
+      acc ++ label label_name ++ string str
+    ) nop !string_literals in
+
+  { text = 
+      (* 外部函數宣告 *)
+      inline ".extern printf\n" ++
+      inline ".extern puts\n" ++
+      inline ".extern strlen\n" ++
+      inline ".extern malloc\n" ++
+      inline ".extern strcpy\n" ++
+      inline ".extern strcmp\n" ++
+      inline ".extern strcat\n" ++
+      inline ".extern exit\n" ++
+      
+      (* malloc包裝函數 *)
+      inline (malloc_wrapper()) ++
+
+      (* 主程式 *)
+      globl "main" ++
+      label "main" ++
+      pushq (reg rbp) ++
+      movq (reg rsp) (reg rbp) ++
+      subq (imm 8192) (reg rsp) ++  (* 為區域變數預留空間 *)
+      compile_stmt main_stmt ++
+      movq (imm 0) (reg rax) ++
+      leave ++
+      ret ++
+
+      (* 所有函數定義 *)
+      functions_code ++
+
+      (* 列表比較函數 *)
+      compare_lists_code ++
+
+      (* print_element 函數 *)
+      print_element_code ++
+
+      (* 列表輸出函數 *)
+      print_list_code ++
+
+      (* 錯誤處理程式碼 *)
+      error_code;
+
+    data = 
+      data_section ++  (* 固定的字串常量 *)
+      const_strings    (* 程式中的字串常量 *)
+  }
