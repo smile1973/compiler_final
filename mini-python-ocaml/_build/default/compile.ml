@@ -55,9 +55,11 @@ let create_bool b =
   movq (imm (if b then 1 else 0)) (ind ~ofs:size_int rax)  (* 設定值 *)
 
 let create_int n =
-  allocate_memory (2 * size_int) ++   (* tag + value *)
-  movq (imm tag_int) (ind rax) ++     (* 設定 tag *)
-  movq (imm n) (ind ~ofs:size_int rax) (* 設定值 *)
+  pushq (imm n) ++            (* 保存要設置的值 *)
+  allocate_memory (2 * size_int) ++     (* tag + value *)
+  movq (imm tag_int) (ind rax) ++       (* 設置 tag *)
+  popq rsi ++                  (* 恢復值 *)
+  movq (reg rsi) (ind ~ofs:size_int rax)  (* 設置值 *)
 
 let create_string s =
   incr string_counter;
@@ -130,15 +132,25 @@ let rec compile_expr expr =
           cmpq (imm tag_int) (reg rcx) ++
           jne l_string ++
           cmpq (imm tag_int) (reg rdx) ++
-          jne l_string ++
+          jne l_list ++
           
           (* 整數加法 *)
-          movq (ind ~ofs:size_int rax) (reg rsi) ++
-          movq (ind ~ofs:size_int r11) (reg rdi) ++
-          addq (reg rdi) (reg rsi) ++
-          allocate_memory (2 * size_int) ++
-          movq (imm tag_int) (ind rax) ++
-          movq (reg rsi) (ind ~ofs:size_int rax) ++
+          movq (ind ~ofs:size_int rax) (reg rsi) ++  (* 取得第一個整數值 *)
+          movq (ind ~ofs:size_int r11) (reg rdi) ++  (* 取得第二個整數值 *)
+          pushq (reg rsi) ++                         (* 保存第一個值 *)
+          pushq (reg rdi) ++                         (* 保存第二個值 *)
+          addq (reg rdi) (reg rsi) ++                (* 執行加法 *)
+          pushq (reg rsi) ++                         (* 保存結果 *)
+          
+          (* 分配新空間保存結果 *)
+          movq (imm (2 * size_int)) (reg rdi) ++
+          call "my_malloc" ++
+          
+          (* 設置結果對象 *)
+          movq (imm tag_int) (ind rax) ++           (* 設置整數標籤 *)
+          popq rsi ++                               (* 恢復計算結果 *)
+          movq (reg rsi) (ind ~ofs:size_int rax) ++ (* 保存計算結果 *)
+          addq (imm 16) (reg rsp) ++                (* 清理堆疊 *)
           jmp l_end ++
           
           (* 字串連接 *)
@@ -271,74 +283,119 @@ let rec compile_expr expr =
 
       (* 減法 *)
       | Bsub ->
-          compile_expr e1 ++
-          pushq (reg rax) ++
-          compile_expr e2 ++
-          movq (reg rax) (reg r11) ++
-          popq rax ++
-          (* 檢查兩邊都是整數 *)
-          movq (ind rax) (reg rcx) ++
-          movq (ind r11) (reg rdx) ++
-          cmpq (imm tag_int) (reg rcx) ++
-          jne "error" ++
-          cmpq (imm tag_int) (reg rdx) ++
-          jne "error" ++
-          (* 執行減法 *)
-          movq (ind ~ofs:size_int rax) (reg rsi) ++
-          movq (ind ~ofs:size_int r11) (reg rdi) ++
-          subq (reg rdi) (reg rsi) ++
-          allocate_memory (2 * size_int) ++
-          movq (imm tag_int) (ind rax) ++
-          movq (reg rsi) (ind ~ofs:size_int rax)
+        (* 計算兩個表達式的值 *)
+        compile_expr e1 ++               (* 計算第一個表達式，結果在 rax *)
+        pushq (reg rax) ++               (* 保存第一個值 *)
+        compile_expr e2 ++               (* 計算第二個表達式，結果在 rax *)
+        movq (reg rax) (reg r11) ++      (* 第二個值移到 r11 *)
+        popq rax ++                      (* 恢復第一個值到 rax *)
+        
+        (* 檢查類型 *)
+        movq (ind rax) (reg rcx) ++      (* 取得第一個值的類型 *)
+        movq (ind r11) (reg rdx) ++      (* 取得第二個值的類型 *)
+        
+        (* 檢查是否為整數 *)
+        cmpq (imm tag_int) (reg rcx) ++
+        jne "error" ++
+        cmpq (imm tag_int) (reg rdx) ++
+        jne "error" ++
+        
+        (* 整數減法 *)
+        movq (ind ~ofs:size_int rax) (reg rsi) ++  (* 取得第一個整數值 *)
+        movq (ind ~ofs:size_int r11) (reg rdi) ++  (* 取得第二個整數值 *)
+        pushq (reg rsi) ++                         (* 保存第一個值 *)
+        pushq (reg rdi) ++                         (* 保存第二個值 *)
+        subq (reg rdi) (reg rsi) ++                (* 執行減法 *)
+        pushq (reg rsi) ++                         (* 保存結果 *)
+        
+        (* 分配新空間保存結果 *)
+        movq (imm (2 * size_int)) (reg rdi) ++
+        call "my_malloc" ++
+        
+        (* 設置結果對象 *)
+        movq (imm tag_int) (ind rax) ++           (* 設置整數標籤 *)
+        popq rsi ++                               (* 恢復計算結果 *)
+        movq (reg rsi) (ind ~ofs:size_int rax) ++ (* 保存計算結果 *)
+        addq (imm 16) (reg rsp)                   (* 清理堆疊 *)
 
       (* 乘法 *)
       | Bmul ->
-          compile_expr e1 ++
-          pushq (reg rax) ++
-          compile_expr e2 ++
-          movq (reg rax) (reg r11) ++
-          popq rax ++
-          (* 檢查兩邊都是整數 *)
-          movq (ind rax) (reg rcx) ++
-          movq (ind r11) (reg rdx) ++
-          cmpq (imm tag_int) (reg rcx) ++
-          jne "error" ++
-          cmpq (imm tag_int) (reg rdx) ++
-          jne "error" ++
-          (* 執行乘法 *)
-          movq (ind ~ofs:size_int rax) (reg rsi) ++
-          movq (ind ~ofs:size_int r11) (reg rdi) ++
-          imulq (reg rdi) (reg rsi) ++
-          allocate_memory (2 * size_int) ++
-          movq (imm tag_int) (ind rax) ++
-          movq (reg rsi) (ind ~ofs:size_int rax)
+        (* 計算兩個表達式的值 *)
+        compile_expr e1 ++               (* 計算第一個表達式，結果在 rax *)
+        pushq (reg rax) ++               (* 保存第一個值 *)
+        compile_expr e2 ++               (* 計算第二個表達式，結果在 rax *)
+        movq (reg rax) (reg r11) ++      (* 第二個值移到 r11 *)
+        popq rax ++                      (* 恢復第一個值到 rax *)
+
+        (* 檢查類型 *)
+        movq (ind rax) (reg rcx) ++      (* 取得第一個值的類型 *)
+        movq (ind r11) (reg rdx) ++      (* 取得第二個值的類型 *)
+
+        (* 檢查是否為整數 *)
+        cmpq (imm tag_int) (reg rcx) ++
+        jne "error" ++
+        cmpq (imm tag_int) (reg rdx) ++
+        jne "error" ++
+
+        (* 整數乘法 *)
+        movq (ind ~ofs:size_int rax) (reg rsi) ++  (* 取得第一個整數值 *)
+        movq (ind ~ofs:size_int r11) (reg rdi) ++  (* 取得第二個整數值 *)
+        pushq (reg rsi) ++                         (* 保存第一個值 *)
+        pushq (reg rdi) ++                         (* 保存第二個值 *)
+        imulq (reg rdi) (reg rsi) ++               (* 執行乘法 *)
+        pushq (reg rsi) ++                         (* 保存結果 *)
+
+        (* 分配新空間保存結果 *)
+        movq (imm (2 * size_int)) (reg rdi) ++
+        call "my_malloc" ++
+
+        (* 設置結果對象 *)
+        movq (imm tag_int) (ind rax) ++           (* 設置整數標籤 *)
+        popq rsi ++                               (* 恢復計算結果 *)
+        movq (reg rsi) (ind ~ofs:size_int rax) ++ (* 保存計算結果 *)
+        addq (imm 16) (reg rsp)                   (* 清理堆疊 *)
 
       (* 除法 *)
       | Bdiv ->
-          compile_expr e1 ++
-          pushq (reg rax) ++
-          compile_expr e2 ++
-          movq (reg rax) (reg r11) ++
-          popq rax ++
-          (* 檢查兩邊都是整數 *)
-          movq (ind rax) (reg rcx) ++
-          movq (ind r11) (reg rdx) ++
-          cmpq (imm tag_int) (reg rcx) ++
-          jne "error" ++
-          cmpq (imm tag_int) (reg rdx) ++
-          jne "error" ++
-          (* 檢查除數不為0 *)
-          movq (ind ~ofs:size_int r11) (reg rcx) ++
-          cmpq (imm 0) (reg rcx) ++
-          je "error_div_by_zero" ++
-          (* 執行除法 *)
-          movq (ind ~ofs:size_int rax) (reg rax) ++
-          cqto ++
-          idivq (reg rcx) ++
-          movq (reg rax) (reg rsi) ++
-          allocate_memory (2 * size_int) ++
-          movq (imm tag_int) (ind rax) ++
-          movq (reg rsi) (ind ~ofs:size_int rax)
+        (* 計算兩個表達式的值 *)
+        compile_expr e1 ++               (* 計算第一個表達式，結果在 rax *)
+        pushq (reg rax) ++               (* 保存第一個值 *)
+        compile_expr e2 ++               (* 計算第二個表達式，結果在 rax *)
+        movq (reg rax) (reg r11) ++      (* 第二個值移到 r11 *)
+        popq rax ++                      (* 恢復第一個值到 rax *)
+        
+        (* 檢查類型 *)
+        movq (ind rax) (reg rcx) ++      (* 取得第一個值的類型 *)
+        movq (ind r11) (reg rdx) ++      (* 取得第二個值的類型 *)
+        
+        (* 檢查是否為整數 *)
+        cmpq (imm tag_int) (reg rcx) ++
+        jne "error" ++
+        cmpq (imm tag_int) (reg rdx) ++
+        jne "error" ++
+        
+        (* 除法前的準備：檢查除數是否為0 *)
+        movq (ind ~ofs:size_int r11) (reg rcx) ++
+        cmpq (imm 0) (reg rcx) ++
+        je "error_div_by_zero" ++
+        
+        (* 整數除法 *)
+        movq (ind ~ofs:size_int rax) (reg rax) ++  (* 被除數到 rax *)
+        pushq (reg rdx) ++                         (* 保存 rdx *)
+        cqto ++                                    (* 擴展 rax 到 rdx:rax *)
+        idivq (reg rcx) ++                         (* 執行除法，商在 rax *)
+        pushq (reg rax) ++                         (* 保存商 *)
+        
+        (* 分配新空間保存結果 *)
+        movq (imm (2 * size_int)) (reg rdi) ++
+        call "my_malloc" ++
+        
+        (* 設置結果對象 *)
+        movq (imm tag_int) (ind rax) ++           (* 設置整數標籤 *)
+        popq rsi ++                               (* 恢復除法結果 *)
+        movq (reg rsi) (ind ~ofs:size_int rax) ++ (* 保存結果 *)
+        popq rdx                                  (* 恢復 rdx *)
+
 
       (* 取模 *)
       | Bmod ->
@@ -559,7 +616,6 @@ let rec compile_expr expr =
     end
   
   | _ -> failwith "error" end
-    
 
   and compare_values op =
     let l_true = new_label () in
@@ -916,8 +972,10 @@ let rec compile_stmt = function
 (* print 語句：編譯表達式，然後根據型別進行對應的輸出 *)
   | TSprint e ->
     compile_expr e ++  (* 計算表達式的值，結果在 rax *)
-    (* 讀取標籤類型並判斷 *)
-    movq (ind rax) (reg rsi) ++
+    pushq (reg rax) ++ (* 保存輸出值 *)
+
+    (* 檢查類型 *)
+    movq (ind rax) (reg rsi) ++  (* 取得類型標籤 *)
     cmpq (imm tag_none) (reg rsi) ++
     je "print_none_value" ++
     cmpq (imm tag_bool) (reg rsi) ++
@@ -930,13 +988,13 @@ let rec compile_stmt = function
 
     (* Print int *)
     label "print_int_value" ++
-    pushq (reg rax) ++            (* 保存整個對象指針 *)
-    movq (ind ~ofs:size_int rax) (reg rsi) ++  (* 獲取整數值 *)
+    popq rax ++                         (* 恢復要打印的值 *)
+    pushq (reg rax) ++                  (* 再次保存，因為後面還要用 *)
+    movq (ind ~ofs:size_int rax) (reg rsi) ++
     movq (ilab "fmt_int") (reg rdi) ++
-    xorq (reg rax) (reg rax) ++   (* printf needs rax = 0 *)
+    xorq (reg rax) (reg rax) ++         (* printf needs rax = 0 *)
     call "printf" ++
-    popq rax ++                   (* 恢復對象指針 *)
-    jmp "print_end_value" ++
+    jmp "print_newline" ++
 
     (* Print string *)
     label "print_string_value" ++
@@ -944,7 +1002,7 @@ let rec compile_stmt = function
     movq (ilab "fmt_string") (reg rdi) ++
     xorq (reg rax) (reg rax) ++
     call "printf" ++
-    jmp "print_end_value" ++
+    jmp "print_newline" ++
 
     (* Print None *)
     label "print_none_value" ++
@@ -952,7 +1010,7 @@ let rec compile_stmt = function
     movq (ilab "fmt_string") (reg rdi) ++
     xorq (reg rax) (reg rax) ++
     call "printf" ++
-    jmp "print_end_value" ++
+    jmp "print_newline" ++
 
     (* Print bool *)
     label "print_bool_value" ++
@@ -967,18 +1025,21 @@ let rec compile_stmt = function
     movq (ilab "fmt_string") (reg rdi) ++
     xorq (reg rax) (reg rax) ++
     call "printf" ++
-    jmp "print_end_value" ++
+    jmp "print_newline" ++
 
     (* Print list *)
     label "print_list_value" ++
     movq (reg rax) (reg rdi) ++
-    call "print_list" ++          (* 呼叫外部的 print_list 函數 *)
+    call "print_list" ++
+    jmp "print_newline" ++
 
     (* Print newline and cleanup *)
-    label "print_end_value" ++
+    label "print_newline" ++
+    popq rax ++                         (* 恢復原始值 *)
+    pushq (reg rax) ++                  (* 保持堆疊平衡 *)
     movq (imm 10) (reg rdi) ++
     call "putchar" ++
-    movq (imm 0) (reg rax)
+    popq rax
   
     (* 變數賦值 *)
   | TSassign (v, e) ->

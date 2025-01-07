@@ -21,121 +21,40 @@ main:
 	pushq %rbp
 	movq %rsp, %rbp
 	subq $8192, %rsp
+	pushq $17
 	movq $16, %rdi
 	call my_malloc
 	movq $2, 0(%rax)
-	movq $1, 8(%rax)
+	popq %rsi
+	movq %rsi, 8(%rax)
 	pushq %rax
+	pushq $3
 	movq $16, %rdi
 	call my_malloc
 	movq $2, 0(%rax)
-	movq $2, 8(%rax)
+	popq %rsi
+	movq %rsi, 8(%rax)
 	movq %rax, %r11
 	popq %rax
 	movq 0(%rax), %rcx
 	movq 0(%r11), %rdx
 	cmpq $2, %rcx
-	jne L4
+	jne error
 	cmpq $2, %rdx
-	jne L4
+	jne error
 	movq 8(%rax), %rsi
 	movq 8(%r11), %rdi
-	addq %rdi, %rsi
+	pushq %rsi
+	pushq %rdi
+	subq %rdi, %rsi
+	pushq %rsi
 	movq $16, %rdi
 	call my_malloc
 	movq $2, 0(%rax)
+	popq %rsi
 	movq %rsi, 8(%rax)
-	jmp L6
-L4:
-	cmpq $3, %rcx
-	jne L5
-	cmpq $3, %rdx
-	jne L5
-	pushq %r11
+	addq $16, %rsp
 	pushq %rax
-	leaq 16(%rax), %rdi
-	call strlen
-	movq %rax, %r12
-	popq %rax
-	popq %r11
-	pushq %r12
-	pushq %r11
-	pushq %rax
-	leaq 16(%r11), %rdi
-	call strlen
-	movq %rax, %r13
-	addq %r12, %r13
-	addq $1, %r13
-	movq %r13, %rdi
-	call malloc
-	popq %r12
-	popq %r11
-	popq %r14
-	pushq %rax
-	movq %rax, %rdi
-	leaq 16(%r12), %rsi
-	call strcpy
-	popq %rax
-	pushq %rax
-	addq %r14, %rdi
-	leaq 16(%r11), %rsi
-	call strcat
-	popq %rax
-	movq $3, 0(%rax)
-	movq %r13, 8(%rax)
-	jmp L6
-L5:
-L5:
-	cmpq $4, %rcx
-	jne error
-	cmpq $4, %rdx
-	jne error
-	pushq %rax
-	pushq %r11
-	movq 8(%rax), %r12
-	movq 8(%r11), %r13
-	movq %r12, %rdi
-	addq %r13, %rdi
-	pushq %rdi
-	imulq $8, %rdi
-	addq $16, %rdi
-	call malloc
-	popq %rdi
-	movq $4, 0(%rax)
-	movq %rdi, 8(%rax)
-	movq %rax, %r14
-	popq %r11
-	popq %r15
-	xorq %rcx, %rcx
-copy_list1_loop:
-	cmpq %r12, %rcx
-	je copy_list1_end
-	movq %rcx, %rdx
-	imulq $8, %rdx
-	addq $16, %rdx
-	movq 0(%r15,%rdx,1), %rdi
-	movq 0(%r14,%rdx,1), %rdi
-	incq %rcx
-	jmp copy_list1_loop
-copy_list1_end:
-	xorq %rcx, %rcx
-copy_list2_loop:
-	cmpq %r13, %rcx
-	je copy_list2_end
-	movq %rcx, %rdx
-	imulq $8, %rdx
-	addq $16, %rdx
-	movq 0(%r11,%rdx,1), %rdi
-	movq %r12, %r8
-	addq %rcx, %r8
-	imulq $8, %r8
-	addq $16, %r8
-	movq %rdi, 0(%r14,%r8,1)
-	incq %rcx
-	jmp copy_list2_loop
-copy_list2_end:
-	movq %r14, %rax
-L6:
 	movq 0(%rax), %rsi
 	cmpq $0, %rsi
 	je print_none_value
@@ -147,25 +66,25 @@ L6:
 	je print_int_value
 	jmp print_string_value
 print_int_value:
+	popq %rax
 	pushq %rax
 	movq 8(%rax), %rsi
 	movq $fmt_int, %rdi
 	xorq %rax, %rax
 	call printf
-	popq %rax
-	jmp print_end_value
+	jmp print_newline
 print_string_value:
 	leaq 16(%rax), %rsi
 	movq $fmt_string, %rdi
 	xorq %rax, %rax
 	call printf
-	jmp print_end_value
+	jmp print_newline
 print_none_value:
 	movq $str_none, %rsi
 	movq $fmt_string, %rdi
 	xorq %rax, %rax
 	call printf
-	jmp print_end_value
+	jmp print_newline
 print_bool_value:
 	movq 8(%rax), %r11
 	cmpq $0, %r11
@@ -178,14 +97,17 @@ print_bool_str_value:
 	movq $fmt_string, %rdi
 	xorq %rax, %rax
 	call printf
-	jmp print_end_value
+	jmp print_newline
 print_list_value:
 	movq %rax, %rdi
 	call print_list
-print_end_value:
+	jmp print_newline
+print_newline:
+	popq %rax
+	pushq %rax
 	movq $10, %rdi
 	call putchar
-	movq $0, %rax
+	popq %rax
 	movq $0, %rax
 	leave
 	ret
