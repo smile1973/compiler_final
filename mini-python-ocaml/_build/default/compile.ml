@@ -396,33 +396,47 @@ let rec compile_expr expr =
         movq (reg rsi) (ind ~ofs:size_int rax) ++ (* 保存結果 *)
         popq rdx                                  (* 恢復 rdx *)
 
-
       (* 取模 *)
       | Bmod ->
-          compile_expr e1 ++
-          pushq (reg rax) ++
-          compile_expr e2 ++
-          movq (reg rax) (reg r11) ++
-          popq rax ++
-          (* 檢查兩邊都是整數 *)
-          movq (ind rax) (reg rcx) ++
-          movq (ind r11) (reg rdx) ++
-          cmpq (imm tag_int) (reg rcx) ++
-          jne "error" ++
-          cmpq (imm tag_int) (reg rdx) ++
-          jne "error" ++
-          (* 檢查除數不為0 *)
-          movq (ind ~ofs:size_int r11) (reg rcx) ++
-          cmpq (imm 0) (reg rcx) ++
-          je "error_div_by_zero" ++
-          (* 執行取模 *)
-          movq (ind ~ofs:size_int rax) (reg rax) ++
-          cqto ++
-          idivq (reg rcx) ++
-          movq (reg rdx) (reg rsi) ++  (* 取餘數 *)
-          allocate_memory (2 * size_int) ++
-          movq (imm tag_int) (ind rax) ++
-          movq (reg rsi) (ind ~ofs:size_int rax)
+        (* 計算兩個表達式的值 *)
+        compile_expr e1 ++               (* 計算第一個表達式，結果在 rax *)
+        pushq (reg rax) ++               (* 保存第一個值 *)
+        compile_expr e2 ++               (* 計算第二個表達式，結果在 rax *)
+        movq (reg rax) (reg r11) ++      (* 第二個值移到 r11 *)
+        popq rax ++                      (* 恢復第一個值到 rax *)
+        
+        (* 檢查類型 *)
+        movq (ind rax) (reg rcx) ++      (* 取得第一個值的類型 *)
+        movq (ind r11) (reg rdx) ++      (* 取得第二個值的類型 *)
+        
+        (* 檢查是否為整數 *)
+        cmpq (imm tag_int) (reg rcx) ++
+        jne "error" ++
+        cmpq (imm tag_int) (reg rdx) ++
+        jne "error" ++
+        
+        (* 取模前檢查除數是否為0 *)
+        movq (ind ~ofs:size_int r11) (reg rcx) ++
+        cmpq (imm 0) (reg rcx) ++
+        je "error_div_by_zero" ++
+        
+        (* 執行取模運算 *)
+        movq (ind ~ofs:size_int rax) (reg rax) ++  (* 被除數到 rax *)
+        pushq (reg rdx) ++                         (* 保存 rdx *)
+        cqto ++                                    (* 擴展 rax 到 rdx:rax *)
+        idivq (reg rcx) ++                         (* 執行除法，餘數在 rdx *)
+        movq (reg rdx) (reg rsi) ++                (* 保存餘數 *)
+        pushq (reg rsi) ++                         (* 保存結果 *)
+        
+        (* 分配新空間保存結果 *)
+        movq (imm (2 * size_int)) (reg rdi) ++
+        call "my_malloc" ++
+        
+        (* 設置結果對象 *)
+        movq (imm tag_int) (ind rax) ++           (* 設置整數標籤 *)
+        popq rsi ++                               (* 恢復取模結果 *)
+        movq (reg rsi) (ind ~ofs:size_int rax) ++ (* 保存結果 *)
+        popq rdx                                  (* 恢復 rdx *)
 
       (* 比較運算子 *)
       | Beq | Bneq | Blt | Ble | Bgt | Bge as op ->
@@ -974,8 +988,9 @@ let rec compile_stmt = function
     compile_expr e ++  (* 計算表達式的值，結果在 rax *)
     pushq (reg rax) ++ (* 保存輸出值 *)
 
-    (* 檢查類型 *)
-    movq (ind rax) (reg rsi) ++  (* 取得類型標籤 *)
+    (* 檢查類型並跳轉到共用的打印例程 *)
+    movq (ind rax) (reg rsi) ++  (* 獲取標籤類型 *)
+
     cmpq (imm tag_none) (reg rsi) ++
     je "print_none_value" ++
     cmpq (imm tag_bool) (reg rsi) ++
@@ -1162,6 +1177,55 @@ let error_handlers =
   movq (imm 1) (reg rdi) ++
   call "exit"
 
+let generate_print_routines =
+  label "_print_int" ++
+  popq rax ++
+  pushq (reg rax) ++
+  movq (ind ~ofs:size_int rax) (reg rsi) ++
+  movq (ilab "fmt_int") (reg rdi) ++
+  xorq (reg rax) (reg rax) ++
+  call "printf" ++
+  jmp "_print_end" ++
+
+  label "_print_string" ++
+  leaq (ind ~ofs:(2 * size_int) rax) (rsi) ++
+  movq (ilab "fmt_string") (reg rdi) ++
+  xorq (reg rax) (reg rax) ++
+  call "printf" ++
+  jmp "_print_end" ++
+
+  label "_print_none" ++
+  movq (ilab "str_none") (reg rsi) ++
+  movq (ilab "fmt_string") (reg rdi) ++
+  xorq (reg rax) (reg rax) ++
+  call "printf" ++
+  jmp "_print_end" ++
+
+  label "_print_bool" ++
+  movq (ind ~ofs:size_int rax) (reg r11) ++
+  cmpq (imm 0) (reg r11) ++
+  je "_print_false" ++
+  movq (ilab "str_true") (reg rsi) ++
+  jmp "_print_bool_str" ++
+  label "_print_false" ++
+  movq (ilab "str_false") (reg rsi) ++
+  label "_print_bool_str" ++
+  movq (ilab "fmt_string") (reg rdi) ++
+  xorq (reg rax) (reg rax) ++
+  call "printf" ++
+  jmp "_print_end" ++
+
+  label "_print_list" ++
+  movq (reg rax) (reg rdi) ++
+  call "print_list" ++
+  
+  label "_print_end" ++
+  popq rax ++
+  pushq (reg rax) ++
+  movq (imm 10) (reg rdi) ++
+  call "putchar" ++
+  popq rax
+
 let file ?debug:(b=false) (p: Ast.tfile) : X86_64.program =
   debug := b;
   
@@ -1311,3 +1375,4 @@ let file ?debug:(b=false) (p: Ast.tfile) : X86_64.program =
       data_section ++  (* 固定的字串常量 *)
       const_strings    (* 程式中的字串常量 *)
   }
+  

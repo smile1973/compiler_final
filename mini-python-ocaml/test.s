@@ -21,14 +21,14 @@ main:
 	pushq %rbp
 	movq %rsp, %rbp
 	subq $8192, %rsp
-	pushq $17
+	pushq $9
 	movq $16, %rdi
 	call my_malloc
 	movq $2, 0(%rax)
 	popq %rsi
 	movq %rsi, 8(%rax)
 	pushq %rax
-	pushq $3
+	pushq $11
 	movq $16, %rdi
 	call my_malloc
 	movq $2, 0(%rax)
