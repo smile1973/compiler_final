@@ -1,1 +1,1 @@
-compile.ml: Ast Format Int64 List Printf String X86_64
+compile.ml: Ast Format List Printf X86_64
