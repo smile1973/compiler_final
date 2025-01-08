@@ -142,7 +142,7 @@ let rec compile_expr = function
       | "and" ->
         let lbl_end = new_label () in
         cmpq (imm 0) (reg rax) ++
-        jne lbl_end ++
+        je lbl_end ++
         andq (reg rcx) (reg rax) ++
         jmp lbl_end ++
         label lbl_end 
@@ -198,12 +198,12 @@ let rec compile_expr = function
         | "mul" -> imulq (reg rcx) (reg rax)
         | "div" ->
             cmpq (imm 0) (reg rcx) ++        (* 檢查除數是否為 0 *)
-            failwith "error : divided with 0" ++
+            (* 跳轉至錯誤處理 *)
             cqto ++                          (* 擴展 RAX -> RDX:RAX *)
             idivq (reg rcx)
         | "mod" ->
             cmpq (imm 0) (reg rcx) ++        (* 檢查除數是否為 0 *)
-            failwith "error : mod with 0" ++
+            (* 跳轉至錯誤處理 *)
             cqto ++                          (* 擴展 RAX -> RDX:RAX *)
             idivq (reg rcx) ++
             movq (reg rdx) (reg rax)

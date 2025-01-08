@@ -142,7 +142,7 @@ let rec compile_expr = function
       | "and" ->
         let lbl_end = new_label () in
         cmpq (imm 0) (reg rax) ++
-        jne lbl_end ++
+        je lbl_end ++
         andq (reg rcx) (reg rax) ++
         jmp lbl_end ++
         label lbl_end 
@@ -154,28 +154,28 @@ let rec compile_expr = function
         jmp lbl_end ++
         label lbl_end 
       | "eq" ->
-        cmpq (reg rcx) (reg rax) ++      (* 比較兩個值 *)
-        sete (reg al) ++                 (* 如果相等，al=1；否則al=0 *)
-        movzbq (reg al) (rax)        (* 零擴展到 rax *)
+        cmpq (reg rcx) (reg rax) ++
+        sete (reg al) ++
+        movzbq (reg al) (rax)
       | "neq" ->
-        cmpq (reg rcx) (reg rax) ++      (* 比較兩個值 *)
-        setne (reg al) ++                 (* 如果相等，al=1；否則al=0 *)
-        movzbq (reg al) (rax)        (* 零擴展到 rax *)
-      | "gt" ->                          (* > *)
-        cmpq (reg rcx) (reg rax) ++      (* 比較 a > b *)
-        setg (reg al) ++                 (* 如果大於，al=1；否則al=0 *)
+        cmpq (reg rcx) (reg rax) ++
+        setne (reg al) ++
         movzbq (reg al) (rax)
-      | "ge" ->                          (* >= *)
-        cmpq (reg rcx) (reg rax) ++      (* 比較 a >= b *)
-        setge (reg al) ++                (* 如果大於等於，al=1；否則al=0 *)
+      | "gt" ->
+        cmpq (reg rcx) (reg rax) ++ 
+        setg (reg al) ++
         movzbq (reg al) (rax)
-      | "lt" ->                          (* < *)
-        cmpq (reg rcx) (reg rax) ++      (* 比較 a < b *)
-        setl (reg al) ++                 (* 如果小於，al=1；否則al=0 *)
+      | "ge" ->
+        cmpq (reg rcx) (reg rax) ++
+        setge (reg al) ++
         movzbq (reg al) (rax)
-      | "le" ->                          (* <= *)
-        cmpq (reg rcx) (reg rax) ++      (* 比較 a <= b *)
-        setle (reg al) ++                (* 如果小於等於，al=1；否則al=0 *)
+      | "lt" ->
+        cmpq (reg rcx) (reg rax) ++
+        setl (reg al) ++
+        movzbq (reg al) (rax)
+      | "le" ->
+        cmpq (reg rcx) (reg rax) ++
+        setle (reg al) ++
         movzbq (reg al) (rax)
       | _ -> failwith "Unsupported operation") ++
       pushq (reg rax) ++                   (* 保存結果 *)
@@ -193,20 +193,20 @@ let rec compile_expr = function
       movq (ind ~ofs:8 rax) (reg rax) ++   (* 取出第一個數的值 *)
       movq (ind ~ofs:8 rcx) (reg rcx) ++   (* 取出第二個數的值 *)
       (match op_type with
-        | "add" -> addq (reg rcx) (reg rax)  (* 加法 *)
-        | "sub" -> subq (reg rcx) (reg rax)  (* 減法 *)
-        | "mul" -> imulq (reg rcx) (reg rax) (* 乘法 *)
+        | "add" -> addq (reg rcx) (reg rax)
+        | "sub" -> subq (reg rcx) (reg rax)
+        | "mul" -> imulq (reg rcx) (reg rax)
         | "div" ->
             cmpq (imm 0) (reg rcx) ++        (* 檢查除數是否為 0 *)
-            (* 跳到錯誤處理 *)
+            (* 跳轉至錯誤處理 *)
             cqto ++                          (* 擴展 RAX -> RDX:RAX *)
-            idivq (reg rcx)                  (* 除法 *)
+            idivq (reg rcx)
         | "mod" ->
             cmpq (imm 0) (reg rcx) ++        (* 檢查除數是否為 0 *)
-            (* 跳到錯誤處理 *)
+            (* 跳轉至錯誤處理 *)
             cqto ++                          (* 擴展 RAX -> RDX:RAX *)
             idivq (reg rcx) ++
-            movq (reg rdx) (reg rax)         (* 將餘數保存到 RAX *)
+            movq (reg rdx) (reg rax)
         | _ -> failwith "Unsupported operation") ++
       pushq (reg rax) ++                   (* 保存結果 *)
       movq (imm 16) (reg rdi) ++           (* 分配16字節空間 *)
@@ -235,8 +235,8 @@ let rec compile_expr = function
 let rec compile_stmt = function
   | TSprint e ->
     compile_expr e ++                (* 計算表達式，結果在rax *)
-    movq (reg rax) (reg rdi) ++     (* 將結果指針移到rdi作為參數 *)
-    call "print_value"              (* 調用統一的打印函數 *)
+    movq (reg rax) (reg rdi) ++
+    call "print_value"
   | TSblock stmts -> 
       List.fold_left (fun code stmt -> code ++ compile_stmt stmt) nop stmts
   | _ -> nop
@@ -264,10 +264,10 @@ let file ?debug:(b=false) (p: Ast.tfile) : X86_64.program =
   if !debug then Printf.printf "Compiling file with %d definitions\n" (List.length p);
   let code = List.fold_left (fun code def -> code ++ compile_fun def) nop p in
   { 
-    text = malloc_wrapper ++          (* malloc包裝函數 *)
-            print_wrap1 ++           (* int打印函數 *)
-            print_wrap2 ++           (* bool打印函數 *)
-            print_value_wrapper ++   (* 統一的打印函數 *)
-            code;                   (* 主程序代碼 *)
+    text = malloc_wrapper ++         (* malloc包裝函數 *)
+            print_wrap1 ++           (* int print *)
+            print_wrap2 ++           (* bool print *)
+            print_value_wrapper ++   (* general print *)
+            code;
     data = inline (format_str1 ^ format_str2);  (* 格式字符串 *)
   }
