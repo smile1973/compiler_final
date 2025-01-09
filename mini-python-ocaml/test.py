@@ -1,15 +1,34 @@
 
+x = 10
+y = 10
+a = 10
+b = 20
+c = 10
+d = 20
+e = 10
+f = 20
+g = 10
+print(x)
+print(y)
+print(a)
+print(b)
+print(c)
+print(d)
+print(e)
+print(f)
+print(g)
+
 # true
-print("" == "")
-print("" < "a")
-print("a" < "da")
-print("ab" >= "ab")
-print("" != "a")
-print("abc" == "abc")
-# false
-print("a" > "b")
-print("" > "b")
-print("abc" <= "ab")
+# print("" == "")
+# print("" < "a")
+# print("a" < "da")
+# print("ab" >= "ab")
+# print("" != "a")
+# print("abc" == "abc")
+# # false
+# print("a" > "b")
+# print("" > "b")
+# print("abc" <= "ab")
 # # print(1+2)
 # # print(10-(10+9))
 # print(len("eeeee"))

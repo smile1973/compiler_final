@@ -1,3 +1,4 @@
+
 open Format
 open X86_64
 open Ast
@@ -5,6 +6,8 @@ open Ast
 let debug = ref false
 let string_table : (string, string) Hashtbl.t = Hashtbl.create 64
 let function_table : (string, fn) Hashtbl.t = Hashtbl.create 16
+let var_table : (string, int) Hashtbl.t = Hashtbl.create 64
+let current_offset = ref (-64)
 
 (* 堆分配包裝函數保持不變 *)
 let malloc_wrapper = 
@@ -256,58 +259,6 @@ let rec compile_expr = function
       popq rdx ++                          (* 恢復結果 *)
       movq (imm 1) (ind ~ofs:0 rax) ++     (* 設置類型標籤為布林值 *)
       movq (reg rdx) (ind ~ofs:8 rax) in
-    (* let compile_compare_string op_type e1 e2 =
-      compile_expr e1 ++                   (* 計算第一個表達式，結果在 rax *)
-      pushq (reg rax) ++                   (* 保存第一個結果到棧上 *)
-      compile_expr e2 ++                   (* 計算第二個表達式，結果在 rax *)
-      movq (reg rax) (reg rcx) ++          (* 保存第二個結果到 rcx *)
-      popq rax ++                          (* 恢復第一個結果到 rax *)
-    
-      (* 設置正確的字串起始地址 *)
-      leaq (ind ~ofs:16 rax) (rdi) ++      (* 字串1的內容地址放入 rdi *)
-      leaq (ind ~ofs:16 rcx) (rsi) ++      (* 字串2的內容地址放入 rsi *)
-    
-      (* 確保棧對齊，調用 strcmp *)
-      subq (imm 8) (reg rsp) ++            (* 棧對齊到 16 字節 *)
-      call "strcmp" ++
-      addq (imm 8) (reg rsp) ++            (* 恢復棧對齊 *)
-    
-      (* 根據 strcmp 的返回值設置比較結果 *)
-      (match op_type with
-      | "eq" ->
-          testq (reg rax) (reg rax) ++      (* 比較 rax 是否為 0 *)
-          sete (reg al) ++                  (* 如果相等，設置 al = 1 *)
-          movzbq (reg al) (rax)             (* 擴展 al 到 rax *)
-      | "neq" ->
-          testq (reg rax) (reg rax) ++      (* 比較 rax 是否為 0 *)
-          setne (reg al) ++                 (* 如果不相等，設置 al = 1 *)
-          movzbq (reg al) (rax)
-      | "lt" ->
-          cmpq (imm 0) (reg rax) ++         (* 比較 rax 是否小於 0 *)
-          setl (reg al) ++                  (* 如果 rax < 0，設置 al = 1 *)
-          movzbq (reg al) (rax)
-      | "le" ->
-          cmpq (imm 0) (reg rax) ++         (* 比較 rax 是否小於等於 0 *)
-          setle (reg al) ++                 (* 如果 rax <= 0，設置 al = 1 *)
-          movzbq (reg al) (rax)
-      | "gt" ->
-          cmpq (imm 0) (reg rax) ++         (* 比較 rax 是否大於 0 *)
-          setg (reg al) ++                  (* 如果 rax > 0，設置 al = 1 *)
-          movzbq (reg al) (rax)
-      | "ge" ->
-          cmpq (imm 0) (reg rax) ++         (* 比較 rax 是否大於等於 0 *)
-          setge (reg al) ++                 (* 如果 rax >= 0，設置 al = 1 *)
-          movzbq (reg al) (rax)
-      | _ -> failwith "error: runtime error") ++
-    
-      (* 建立和返回布林值物件 *)
-      pushq (reg rax) ++                   (* 保存比較結果 *)
-      movq (imm 16) (reg rdi) ++           (* 分配16字節空間 *)
-      call "my_malloc" ++
-      popq rdx ++                          (* 恢復比較結果 *)
-      movq (imm 1) (ind ~ofs:0 rax) ++     (* 設置類型標籤為布林值 *)
-      movq (reg rdx) (ind ~ofs:8 rax) in    (* 存儲比較結果 *)
-     *)
     let compile_binary_op op_type e1 e2 =
       compile_expr e1 ++                   (* 計算第一個表達式，結果在 rax *)
       pushq (reg rax) ++                   (* 保存第一個結果到棧上 *)
@@ -397,7 +348,8 @@ let rec compile_expr = function
     cmpq (imm 3) (reg rdx) ++  (* 是字串? *)
     movq (ind ~ofs:8 rcx) (reg rdx) ++  (* 取得字串長度 *)
     movq (reg rdx) (ind ~ofs:8 rax)     (* 儲存長度 *)
-
+  | TEvar var ->
+    movq (ind ~ofs:var.v_ofs rbp) (!%rdi)
   | _ -> failwith "Unsupported expression type"
 
 (* 編譯語句 *)
@@ -451,14 +403,33 @@ let rec compile_stmt = function
         call "print_value" ++
         movq (imm 10) (!%rdi) ++
         call "putchar"
+      | TEvar (var) ->
+        let old_v_ofs = Hashtbl.find var_table var.v_name in 
+        movq (ind ~ofs:old_v_ofs rbp) (!%rax) ++
+        movq (!%rax) (!%rdi) ++
+        call "print_value" ++
+        movq (imm 10) (!%rdi) ++
+        call "putchar"
       | _ -> nop
       end
     in
     print_code e
+  | TSassign (var, expr) ->
+    let cur_var =
+      if Hashtbl.mem var_table var.v_name then
+        let old_v_ofs = Hashtbl.find var_table var.v_name in 
+        old_v_ofs
+      else
+        let new_v_ofs = !current_offset in
+        Hashtbl.add var_table var.v_name new_v_ofs;
+        current_offset := !current_offset - 16;
+        new_v_ofs
+    in
+    compile_expr expr ++
+    movq (reg rax) (ind ~ofs:cur_var rbp)
   | TSblock stmts -> 
       List.fold_left (fun code stmt -> code ++ compile_stmt stmt) nop stmts
   | _ -> nop
-
 
 (* 編譯函數 *)
 let compile_fun (fn, body) =
@@ -468,7 +439,8 @@ let compile_fun (fn, body) =
       globl "main" ++
       label "main" ++
       pushq (reg rbp) ++
-      movq (reg rsp) (reg rbp) ++
+      movq (reg rsp) (reg rbp) ++    
+      subq (imm 1024) (reg rsp) ++
       compile_stmt body ++     (* 編譯函數體 *)
       movq (imm 0) (reg rax) ++  (* 返回值0 *)
       movq (reg rbp) (reg rsp) ++
