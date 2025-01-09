@@ -70,9 +70,40 @@ print_value_not_bool:
 	jmp print_value_end
 print_value_not_int:
 	cmpq $3, %rdx
-	jne print_value_end
+	jne print_value_not_str
 	leaq 16(%rbx), %rdi
 	call print_string
+	jmp print_value_end
+print_value_not_str:
+	cmpq $4, %rdx
+	jne print_value_end
+	pushq %r12
+	pushq %r13
+	pushq %rbx
+	leaq .LCstart, %rdi
+	call printf
+	movq 8(%rbx), %r12
+	xorq %r13, %r13
+print_list_loop:
+	cmpq %r12, %r13
+	je print_list_end
+	cmpq $0, %r13
+	je print_list_element
+	leaq .LCcomma, %rdi
+	call printf
+print_list_element:
+	movq %r13, %rcx
+	imulq $16, %rcx
+	addq $16, %rcx
+	movq 0(%rbx,%rcx,1), %rdi
+	call print_value
+	incq %r13
+	jmp print_list_loop
+print_list_end:
+	leaq .LCend, %rdi
+	call printf
+	popq %r13
+	popq %r12
 print_value_end:
 	popq %rbx
 	movq %rbp, %rsp
@@ -86,172 +117,98 @@ main:
 	movq $16, %rdi
 	call my_malloc
 	movq $2, 0(%rax)
-	movq $10, 8(%rax)
+	movq $7, 8(%rax)
+	pushq %rax
+	movq 8(%rax), %rbx
+	popq %rax
+	movq $128, %rdi
+	call my_malloc
+	movq $4, 0(%rax)
+	movq $7, 8(%rax)
+	pushq %rax
+	movq $16, %rdi
+	call my_malloc
+	movq $2, 0(%rax)
+	movq $0, 8(%rax)
+	pushq %rax
+	movq 0(%rsp), %rcx
+	popq %rax
+	popq %rdx
+	movq %rcx, 16(%rdx)
+	pushq %rdx
+	movq $16, %rdi
+	call my_malloc
+	movq $2, 0(%rax)
+	movq $1, 8(%rax)
+	pushq %rax
+	movq 0(%rsp), %rcx
+	popq %rax
+	popq %rdx
+	movq %rcx, 32(%rdx)
+	pushq %rdx
+	movq $16, %rdi
+	call my_malloc
+	movq $2, 0(%rax)
+	movq $2, 8(%rax)
+	pushq %rax
+	movq 0(%rsp), %rcx
+	popq %rax
+	popq %rdx
+	movq %rcx, 48(%rdx)
+	pushq %rdx
+	movq $16, %rdi
+	call my_malloc
+	movq $2, 0(%rax)
+	movq $3, 8(%rax)
+	pushq %rax
+	movq 0(%rsp), %rcx
+	popq %rax
+	popq %rdx
+	movq %rcx, 64(%rdx)
+	pushq %rdx
+	movq $16, %rdi
+	call my_malloc
+	movq $2, 0(%rax)
+	movq $4, 8(%rax)
+	pushq %rax
+	movq 0(%rsp), %rcx
+	popq %rax
+	popq %rdx
+	movq %rcx, 80(%rdx)
+	pushq %rdx
+	movq $16, %rdi
+	call my_malloc
+	movq $2, 0(%rax)
+	movq $5, 8(%rax)
+	pushq %rax
+	movq 0(%rsp), %rcx
+	popq %rax
+	popq %rdx
+	movq %rcx, 96(%rdx)
+	pushq %rdx
+	movq $16, %rdi
+	call my_malloc
+	movq $2, 0(%rax)
+	movq $6, 8(%rax)
+	pushq %rax
+	movq 0(%rsp), %rcx
+	popq %rax
+	popq %rdx
+	movq %rcx, 112(%rdx)
+	pushq %rdx
+	popq %rax
 	movq %rax, -64(%rbp)
 	movq $16, %rdi
 	call my_malloc
 	movq $2, 0(%rax)
-	movq $10, 8(%rax)
-	movq %rax, -80(%rbp)
-	movq $16, %rdi
-	call my_malloc
-	movq $2, 0(%rax)
-	movq $10, 8(%rax)
-	movq %rax, -96(%rbp)
-	movq $16, %rdi
-	call my_malloc
-	movq $2, 0(%rax)
-	movq $20, 8(%rax)
-	movq %rax, -112(%rbp)
-	movq $16, %rdi
-	call my_malloc
-	movq $2, 0(%rax)
-	movq $10, 8(%rax)
-	movq %rax, -128(%rbp)
-	movq $16, %rdi
-	call my_malloc
-	movq $2, 0(%rax)
-	movq $20, 8(%rax)
-	movq %rax, -144(%rbp)
-	movq $16, %rdi
-	call my_malloc
-	movq $2, 0(%rax)
-	movq $10, 8(%rax)
-	movq %rax, -160(%rbp)
-	movq $16, %rdi
-	call my_malloc
-	movq $2, 0(%rax)
-	movq $20, 8(%rax)
-	movq %rax, -176(%rbp)
-	movq $16, %rdi
-	call my_malloc
-	movq $2, 0(%rax)
-	movq $10, 8(%rax)
-	movq %rax, -192(%rbp)
-	movq -64(%rbp), %rax
+	movq $7, 8(%rax)
+	movq 8(%rax), %rcx
+	imulq $16, %rcx
+	addq $16, %rcx
+	movq -64(%rbp), %rdx
+	movq 0(%rdx,%rcx,1), %rax
 	movq %rax, %rdi
 	call print_value
-	movq $10, %rdi
-	call putchar
-	movq -80(%rbp), %rax
-	movq %rax, %rdi
-	call print_value
-	movq $10, %rdi
-	call putchar
-	movq -96(%rbp), %rax
-	movq %rax, %rdi
-	call print_value
-	movq $10, %rdi
-	call putchar
-	movq -112(%rbp), %rax
-	movq %rax, %rdi
-	call print_value
-	movq $10, %rdi
-	call putchar
-	movq -128(%rbp), %rax
-	movq %rax, %rdi
-	call print_value
-	movq $10, %rdi
-	call putchar
-	movq -144(%rbp), %rax
-	movq %rax, %rdi
-	call print_value
-	movq $10, %rdi
-	call putchar
-	movq -160(%rbp), %rax
-	movq %rax, %rdi
-	call print_value
-	movq $10, %rdi
-	call putchar
-	movq -176(%rbp), %rax
-	movq %rax, %rdi
-	call print_value
-	movq $10, %rdi
-	call putchar
-	movq -192(%rbp), %rax
-	movq %rax, %rdi
-	call print_value
-	movq $10, %rdi
-	call putchar
-	movq $24, %rdi
-	call my_malloc
-	movq $3, 0(%rax)
-	movq $4, 8(%rax)
-	pushq %rax
-	leaq 16(%rax), %rdi
-	movq $.LC0, %rsi
-	call strcpy
-	popq %rax
-	movq %rax, -208(%rbp)
-	movq -208(%rbp), %rax
-	movq %rax, %rdi
-	call print_value
-	movq $10, %rdi
-	call putchar
-	movq $24, %rdi
-	call my_malloc
-	movq $3, 0(%rax)
-	movq $5, 8(%rax)
-	pushq %rax
-	leaq 16(%rax), %rdi
-	movq $.LC1, %rsi
-	call strcpy
-	popq %rax
-	pushq %rax
-	movq 0(%rax), %rdx
-	movq $16, %rdi
-	call my_malloc
-	movq $2, 0(%rax)
-	popq %rcx
-	cmpq $3, %rdx
-	movq 8(%rcx), %rdx
-	movq %rdx, 8(%rax)
-	movq %rax, %rdi
-	call print_value
-	movq $10, %rdi
-	call putchar
-	movq $24, %rdi
-	call my_malloc
-	movq $3, 0(%rax)
-	movq $5, 8(%rax)
-	pushq %rax
-	leaq 16(%rax), %rdi
-	movq $.LC3, %rsi
-	call strcpy
-	popq %rax
-	movq $24, %rdi
-	call my_malloc
-	movq $3, 0(%rax)
-	movq $5, 8(%rax)
-	pushq %rax
-	leaq 16(%rax), %rdi
-	movq $.LC2, %rsi
-	call strcpy
-	popq %rax
-	movq %rax, %rdi
-	call print_value
-	movq $10, %rdi
-	call putchar
-	movq $24, %rdi
-	call my_malloc
-	movq $3, 0(%rax)
-	movq $5, 8(%rax)
-	pushq %rax
-	leaq 16(%rax), %rdi
-	movq $.LC5, %rsi
-	call strcpy
-	popq %rax
-	call printf
-	movq $24, %rdi
-	call my_malloc
-	movq $3, 0(%rax)
-	movq $5, 8(%rax)
-	pushq %rax
-	leaq 16(%rax), %rdi
-	movq $.LC4, %rsi
-	call strcpy
-	popq %rax
-	call printf
 	movq $10, %rdi
 	call putchar
 	movq $0, %rax
@@ -277,15 +234,3 @@ main:
 	.string "Runtime Error"
 .LClen:
 	.string "len: %d\n"
-.LC5:
-	.string "hello"
-.LC3:
-	.string "hello"
-.LC2:
-	.string "hello"
-.LC0:
-	.string "fuck"
-.LC4:
-	.string "world"
-.LC1:
-	.string "eeeee"

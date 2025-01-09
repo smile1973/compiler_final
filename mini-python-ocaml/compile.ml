@@ -23,8 +23,6 @@ let malloc_wrapper =
     ret;
   ] in
   List.fold_left (++) nop code
-
-(* 統一的print_value函數，處理所有類型的值 *)
 let print_value_wrapper =
   let code = 
     globl "print_value" ++
@@ -55,13 +53,58 @@ let print_value_wrapper =
     (* 字串 *)
     label "print_value_not_int" ++
     cmpq (imm 3) (reg rdx) ++           (* 是字串? *)
-    jne "print_value_end" ++            (* 如果不是，直接結束 *)
+    jne "print_value_not_str" ++            (* 如果不是，直接結束 *)
     leaq (ind ~ofs:16 rbx) (rdi) ++ (* 字串內容的位址 *)
     call "print_string" ++
+    jmp "print_value_end" ++
     
+    (* list *)
+    label "print_value_not_str" ++
+    cmpq (imm 4) (reg rdx) ++   
+    jne "print_value_end" ++ 
+
+    pushq (reg r12) ++    (* 保存 r12 用於儲存長度 *)
+    pushq (reg r13) ++    (* 保存 r13 用於儲存當前索引 *)
+
+    pushq (reg rbx) ++
+    leaq (lab ".LCstart") (rdi) ++
+    call "printf" ++
+
+    movq (ind ~ofs:8 rbx) (reg r12) ++  (* r12 = list長度 *)
+    xorq (reg r13) (reg r13) ++         (* r13 = 目前的索引 = 0 *)
+
+    label "print_list_loop" ++
+    cmpq (reg r12) (reg r13) ++         (* 比較索引和長度 *)
+    je "print_list_end" ++              (* 如果相等，結束迴圈 *)
+
+    (* 如果不是第一個元素，印出逗號 *)
+    cmpq (imm 0) (reg r13) ++
+    je "print_list_element" ++
+    leaq (lab ".LCcomma") (rdi) ++
+    call "printf" ++
+
+    (* 印出當前元素 *)
+    label "print_list_element" ++
+    movq (reg r13) (reg rcx) ++         (* 把索引放入 rcx *)
+    imulq (imm 16) (reg rcx) ++         (* 乘以 16 (每個元素大小) *)
+    addq (imm 16) (reg rcx) ++          (* 加上基本偏移 16 *)
+    movq (ind rbx ~index:rcx) (reg rdi) ++  (* 取得元素 *)
+    call "print_value" ++               (* 遞迴呼叫print_value *)
+
+    (* 增加index並繼續迴圈 *)
+    incq (reg r13) ++
+    jmp "print_list_loop" ++
+
+    (* 印出 ] 並結束 *)
+    label "print_list_end" ++
+    leaq (lab ".LCend") (rdi) ++
+    call "printf" ++
+    popq r13 ++
+    popq r12 ++
+
     (* 結束處理 *)
     label "print_value_end" ++
-    popq rbx ++                         (* 恢復rbx *)
+    popq rbx ++
     movq (reg rbp) (reg rsp) ++
     popq rbp ++
     ret
@@ -129,7 +172,6 @@ let create_int n =
   call "my_malloc" ++
   movq (imm 2) (ind ~ofs:0 rax) ++  (* 設置類型標籤為2(整數) *)
   movq (imm64 n) (ind ~ofs:8 rax)   (* 設置值 *)
-
 let create_bool b =
   let size = 16 in
   let value = if b then 1L else 0L in
@@ -137,13 +179,11 @@ let create_bool b =
   call "my_malloc" ++
   movq (imm 1) (ind ~ofs:0 rax) ++  (* 類型標籤 1 表示布林值 *)
   movq (imm64 value) (ind ~ofs:8 rax)
-
 let label_counter = ref 0
 let fresh_unique_label () =
   let label = Printf.sprintf ".LC%d" !label_counter in
   incr label_counter;
   label    
-
 let create_string str =
   let len = String.length str in
   (* 計算需要的總空間：8(tag) + 8(length) + string_length + 1(null terminator) *)
@@ -177,11 +217,38 @@ let create_string str =
     call "strcpy" ++
     popq rax  (* 恢復指標 *)
   )
+
 (* 編譯表達式 *)
 let rec compile_expr = function
   | TEcst (Cint n) -> create_int n
   | TEcst (Cbool b) -> create_bool b
   | TEcst (Cstring s) -> create_string s
+  | TElist expr_list -> 
+    let list_size = 16 + (16 * List.length expr_list) in  (* 修改: 每個元素需要16 bytes *)
+      movq (imm list_size) (reg rdi) ++
+      call "my_malloc" ++
+      
+      (* 設置型別標籤和長度 *)
+      movq (imm 4) (ind ~ofs:0 rax) ++  (* 型別標籤 4 = list *)
+      movq (imm (List.length expr_list)) (ind ~ofs:8 rax) ++
+      
+      (* 保存list的基址 *)
+      pushq (reg rax) ++
+      
+      (* 編譯並存入每個元素, 現在每個元素佔16 bytes *)
+      let store_elements = List.mapi (fun i e ->
+        compile_expr e ++                (* 編譯元素，結果在rax *)
+        pushq (reg rax) ++              (* 暫存元素值 *)
+        movq (ind ~ofs:0 rsp) (reg rcx) ++  (* 取出元素值 *)
+        popq rax ++                     (* 恢復rax *)
+        popq rdx ++                     (* 取出list基址 *)
+        movq (reg rcx) (ind ~ofs:(16 + 16*i) rdx) ++  (* 修改: 偏移量改為16*i *)
+        pushq (reg rdx)                 (* 保存list基址 *)
+      ) expr_list in
+      
+      List.fold_left (++) nop store_elements ++
+      (* 恢復list的基址到rax *)
+      popq rax
   | TEbinop (op, e1, e2) ->
     let compile_and e1 e2 =
       compile_expr e1 ++                   (* 計算第一個表達式，結果在 rax *)
@@ -324,36 +391,6 @@ let rec compile_expr = function
     | Band -> compile_and e1 e2
     | Bor -> compile_or e1 e2
     end
-  | TElist expr_list -> 
-    movq (ilab ".LCstart") (!%rdi) ++ call "printf" ++
-    let elements_code =
-      List.mapi (fun idx e ->
-        match e with
-        | TEcst _ ->
-          if !debug then Printf.printf "123\n";
-          compile_expr e ++
-          movq (ind ~ofs:8 rax) (reg rdi) ++
-          call "print_int" ++
-          let separator =
-            if idx < List.length expr_list - 1 then
-              movq (ilab ".LCcomma") (!%rdi) ++ call "printf"
-            else nop
-          in
-          separator
-        | TElist _ ->
-          if !debug then Printf.printf "Compiling print statement\n";
-          compile_expr e ++ 
-          let separator =
-            if idx < List.length expr_list - 1 then
-              movq (ilab ".LCcomma") (!%rdi) ++ call "printf"
-            else nop
-          in
-          separator
-        | _ -> failwith "error"
-      ) expr_list in 
-      List.fold_left (fun code e -> code ++ e) nop elements_code ++
-      movq (ilab ".LCend") (!%rdi) ++
-      call "printf" 
   | TEcall (fn, [arg]) when fn.fn_name = "len" ->
     compile_expr arg ++
     pushq (reg rax) ++
@@ -370,22 +407,51 @@ let rec compile_expr = function
     movq (reg rdx) (ind ~ofs:8 rax)     (* 儲存長度 *)
   | TEvar var ->
     movq (ind ~ofs:var.v_ofs rbp) (!%rdi)
+  | TEget (lst, index) ->
+    (match lst with
+    | TEvar var -> 
+        let list_offset = Hashtbl.find var_table var.v_name in
+        
+        (* 編譯索引表達式並獲取值 *)
+        compile_expr index ++
+        movq (ind ~ofs:8 rax) (reg rcx) ++  (* 取出索引值到rcx *)
+        
+        (* 計算要獲取的元素位置 *)
+        imulq (imm 16) (reg rcx) ++      (* 索引 * 16(每個元素大小) *)
+        addq (imm 16) (reg rcx) ++       (* 加上基本偏移16 *)
+        
+        (* 從list中取出對應位置的元素 *)
+        movq (ind ~ofs:list_offset rbp) (reg rdx) ++  (* 取得list起始位置 *)
+        movq (ind rdx ~index:rcx) (reg rax)
+    | _ -> failwith "Unsupported expression type")
+  | TErange n ->
+    (* 編譯範圍大小參數 *)
+    compile_expr n ++
+    pushq (reg rax) ++
+    movq (ind ~ofs:8 rax) (reg rbx) ++  (* 取出範圍大小值 *)
+    popq rax ++
+    
+    (* 生成0到n-1的list *)
+    let size = match n with
+      | TEcst (Cint v) -> Int64.to_int v
+      | _ -> failwith "Range size must be constant"
+    in
+    let range_list = List.init size (fun i -> 
+      TEcst (Cint (Int64.of_int i))
+    ) in
+    
+    (* 使用既有的TElist編譯功能 *)
+    compile_expr (TElist range_list)
   | _ -> failwith "Unsupported expression type"
+
 
 (* 編譯語句 *)
 let rec compile_stmt = function
   | TSprint e ->
     let rec print_code e =
       begin match e with
-      | TEcst (Cint _) | TEcst (Cbool _)->
-        compile_expr e ++                (* 計算表達式，結果在rax *)
-        movq (reg rax) (reg rdi) ++
-        call "print_value" ++
-        movq (imm 10) (!%rdi) ++
-        call "putchar"
-      | TEcst (Cstring _) ->
+      | TEcst (Cint _) | TEcst (Cbool _) | TEcst (Cstring _) | TElist _ | TEget _ ->
         compile_expr e ++
-        compile_expr e ++                (* 計算表達式，結果在rax *)
         movq (reg rax) (reg rdi) ++
         call "print_value" ++
         movq (imm 10) (!%rdi) ++
@@ -415,11 +481,13 @@ let rec compile_stmt = function
           movq (imm 10) (!%rdi) ++
           call "putchar"
         end
-      | TElist (lst) ->
+      | TEcall (fn, arg) when fn.fn_name = "len" ->
         compile_expr e ++
+        movq (reg rax) (reg rdi) ++
+        call "print_value" ++
         movq (imm 10) (!%rdi) ++
         call "putchar"
-      | TEcall (fn, arg) when fn.fn_name = "len" ->
+      | TErange _ ->
         compile_expr e ++
         movq (reg rax) (reg rdi) ++
         call "print_value" ++

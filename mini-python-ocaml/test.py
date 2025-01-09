@@ -1,25 +1,33 @@
 
-x = 10
-y = 10
-a = 10
-b = 20
-c = 10
-d = 20
-e = 10
-f = 20
-g = 10
+# x = 10
+# y = 10
+# a = 10
+# b = 20
+# c = 10
+# d = 20
+# e = 10
+# f = 20
+# g = 10
+# print(x)
+# print(y)
+# print(a)
+# print(b)
+# print(c)
+# print(d)
+# print(e)
+# print(f)
+# print(g)
+x = [111,222,333]
 print(x)
-print(y)
-print(a)
-print(b)
-print(c)
-print(d)
-print(e)
-print(f)
-print(g)
-
-k = "fuck"
-print(k)
+print(len(list(range(7))))
+print(list(range(7)))
+x = list(range(7))
+print(x[7])
+# print(x[1])
+# print(len([111,222,333]))
+# k = "fuck"
+# print(k)
+# print([1, 2, 3])
 
 # true
 # print("" == "")
@@ -34,9 +42,9 @@ print(k)
 # print("abc" <= "ab")
 # # print(1+2)
 # # print(10-(10+9))
-print(len("eeeee"))
-print("hello")
-print("hello" + "world")
+# print(len("eeeee"))
+# print("hello")
+# print("hello" + "world")
 # print(1<2 or len(1))
 # print(10*(9-6+4))
 # print(10//(2+3))
