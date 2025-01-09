@@ -3,6 +3,8 @@ open X86_64
 open Ast
 
 let debug = ref false
+let string_table : (string, string) Hashtbl.t = Hashtbl.create 64
+let function_table : (string, fn) Hashtbl.t = Hashtbl.create 16
 
 (* 堆分配包裝函數保持不變 *)
 let malloc_wrapper = 
@@ -60,7 +62,6 @@ let print_value_wrapper =
   code
 
 let print_int_wrapper =
-  let format_str = ".Sprint_int:\n\t.string \"%d\\n\"\n" in
   let code = [
     globl "print_int";
     label "print_int";
@@ -69,16 +70,14 @@ let print_int_wrapper =
     andq (imm (-16)) (reg rsp);
     movq (imm 0) (reg rax);
     movq (reg rdi) (reg rsi);
-    leaq (lab ".Sprint_int") (rdi);
+    leaq (lab ".LCd") (rdi);
     call "printf";
     movq (reg rbp) (reg rsp);
     popq rbp;
     ret;
   ] in
-  format_str, List.fold_left (++) nop code
+  List.fold_left (++) nop code
 let print_bool_wrapper =
-  let format_true = ".Sprint_true:\n\t.string \"True\\n\"\n" in
-  let format_false = ".Sprint_false:\n\t.string \"False\\n\"\n" in
   let code = [
     globl "print_bool";
     label "print_bool";
@@ -88,19 +87,18 @@ let print_bool_wrapper =
     cmpq (imm 0) (reg rdi);
     je "print_bool_false";
     movq (imm 0) (reg rax);
-    leaq (lab ".Sprint_true") (rdi);
+    leaq (lab ".LCtrue") (rdi);
     jmp "print_bool_end";
     label "print_bool_false";
     movq (imm 0) (reg rax);
-    leaq (lab ".Sprint_false") (rdi);
+    leaq (lab ".LCfalse") (rdi);
     label "print_bool_end";
     call "printf";
     movq (reg rbp) (reg rsp);
     popq rbp;
     ret;
   ] in
-  (format_true ^ format_false), List.fold_left (++) nop code
-
+  List.fold_left (++) nop code
 
 let create_int n =
   if !debug then Printf.printf "Compiling int: %Ld\n" n;
@@ -118,17 +116,23 @@ let create_bool b =
   movq (imm 1) (ind ~ofs:0 rax) ++  (* 類型標籤 1 表示布林值 *)
   movq (imm64 value) (ind ~ofs:8 rax)
 
+
 let label_counter = ref 0
-let new_label () =
-  let lbl = Printf.sprintf "label_%d" !label_counter in
+let fresh_unique_label () =
+  let label = Printf.sprintf ".LC%d" !label_counter in
   incr label_counter;
-  lbl
+  label    
+
+let compile_string str =
+  let label_name = fresh_unique_label () in
+  Hashtbl.add string_table str label_name;
+  movq (ilab label_name) (reg rdi)
 
 (* 編譯表達式 *)
 let rec compile_expr = function
   | TEcst (Cint n) -> create_int n
   | TEcst (Cbool b) -> create_bool b
-
+  | TEcst (Cstring s) -> compile_string s
   | TEbinop (op, e1, e2) ->
     let compile_compare op_type e1 e2 =
       compile_expr e1 ++                   (* 計算第一個表達式，結果在 rax *)
@@ -140,14 +144,14 @@ let rec compile_expr = function
       movq (ind ~ofs:8 rcx) (reg rcx) ++   (* 取出第二個數的值 *)
       (match op_type with
       | "and" ->
-        let lbl_end = new_label () in
+        let lbl_end = fresh_unique_label () in
         cmpq (imm 0) (reg rax) ++
         je lbl_end ++
         andq (reg rcx) (reg rax) ++
         jmp lbl_end ++
         label lbl_end 
       | "or" ->
-        let lbl_end = new_label () in
+        let lbl_end = fresh_unique_label () in
         cmpq (imm 0) (reg rax) ++
         jne lbl_end ++
         orq (reg rcx) (reg rax) ++
@@ -177,7 +181,7 @@ let rec compile_expr = function
         cmpq (reg rcx) (reg rax) ++
         setle (reg al) ++
         movzbq (reg al) (rax)
-      | _ -> failwith "Unsupported operation") ++
+      | _ -> failwith "error: runtime error") ++
       pushq (reg rax) ++                   (* 保存結果 *)
       movq (imm 16) (reg rdi) ++           (* 分配16字節空間 *)
       call "my_malloc" ++
@@ -207,7 +211,7 @@ let rec compile_expr = function
             cqto ++                          (* 擴展 RAX -> RDX:RAX *)
             idivq (reg rcx) ++
             movq (reg rdx) (reg rax)
-        | _ -> failwith "Unsupported operation") ++
+        | _ -> failwith "error: runtime error") ++
       pushq (reg rax) ++                   (* 保存結果 *)
       movq (imm 16) (reg rdi) ++           (* 分配16字節空間 *)
       call "my_malloc" ++
@@ -229,17 +233,99 @@ let rec compile_expr = function
     | Band -> compile_compare "and" e1 e2
     | Bor -> compile_compare "or" e1 e2
     end
+  | TElist expr_list -> 
+    movq (ilab ".LCstart") (!%rdi) ++ call "printf" ++
+    let elements_code =
+      List.mapi (fun idx e ->
+        match e with
+        | TEcst _ ->
+          if !debug then Printf.printf "123\n";
+          compile_expr e ++
+          movq (ind ~ofs:8 rax) (reg rdi) ++
+          call "print_int" ++
+          let separator =
+            if idx < List.length expr_list - 1 then
+              movq (ilab ".LCcomma") (!%rdi) ++ call "printf"
+            else nop
+          in
+          separator
+        | TElist _ ->
+          if !debug then Printf.printf "Compiling print statement\n";
+          compile_expr e ++ 
+          let separator =
+            if idx < List.length expr_list - 1 then
+              movq (ilab ".LCcomma") (!%rdi) ++ call "printf"
+            else nop
+          in
+          separator
+        | _ -> failwith "error"
+      ) expr_list in 
+      List.fold_left (fun code e -> code ++ e) nop elements_code ++
+      movq (ilab ".LCend") (!%rdi) ++
+      call "printf" 
   | _ -> failwith "Unsupported expression type"
 
 (* 編譯語句 *)
 let rec compile_stmt = function
   | TSprint e ->
-    compile_expr e ++                (* 計算表達式，結果在rax *)
-    movq (reg rax) (reg rdi) ++
-    call "print_value"
+    let rec print_code e =
+      begin match e with
+      | TEcst (Cint _) ->
+        compile_expr e ++                (* 計算表達式，結果在rax *)
+        movq (reg rax) (reg rdi) ++
+        call "print_value" ++
+        movq (imm 10) (!%rdi) ++
+        call "putchar"
+      | TEcst (Cbool _) ->
+        compile_expr e ++                (* 計算表達式，結果在rax *)
+        movq (reg rax) (reg rdi) ++
+        call "print_value" ++
+        movq (imm 10) (!%rdi) ++
+        call "putchar"
+      | TEcst (Cstring _) ->
+        compile_expr e ++
+        call "printf" ++
+        movq (imm 10) (!%rdi) ++
+        call "putchar"
+      | TEbinop(op, e1, e2) ->
+        begin match e1 with 
+        | TEcst (Cint _) ->
+          compile_expr e ++
+          movq (reg rax) (reg rdi) ++
+          call "print_value" ++
+          movq (imm 10) (!%rdi) ++
+          call "putchar"
+        | TEcst (Cbool _) ->
+          compile_expr e ++
+          movq (reg rax) (reg rdi) ++
+          call "print_value" ++
+          movq (imm 10) (!%rdi) ++
+          call "putchar"
+        | TEcst (Cstring _) ->
+          if !debug then Printf.printf "Compiling print statement\n";
+          compile_expr e1 ++
+          call "printf" ++
+          compile_expr e2 ++
+          call "printf" ++
+          movq (imm 10) (!%rdi) ++
+          call "putchar"
+        | TElist _ ->
+          compile_expr e1 ++
+          compile_expr e2
+        | _ -> nop
+        end
+      | TElist (lst) ->
+        compile_expr e ++
+        movq (imm 10) (!%rdi) ++
+        call "putchar"
+      | _ -> nop
+      end
+    in
+    print_code e
   | TSblock stmts -> 
       List.fold_left (fun code stmt -> code ++ compile_stmt stmt) nop stmts
   | _ -> nop
+
 
 (* 編譯函數 *)
 let compile_fun (fn, body) =
@@ -259,15 +345,31 @@ let compile_fun (fn, body) =
 
 let file ?debug:(b=false) (p: Ast.tfile) : X86_64.program =
   debug := b;
-  let format_str1, print_wrap1 = print_int_wrapper in
-  let format_str2, print_wrap2 = print_bool_wrapper in
+  let print_wrap1 = print_int_wrapper in
+  let print_wrap2 = print_bool_wrapper in
   if !debug then Printf.printf "Compiling file with %d definitions\n" (List.length p);
   let code = List.fold_left (fun code def -> code ++ compile_fun def) nop p in
+  let string_data =
+    label ".LCtrue"   ++ string "True"   ++
+    label ".LCfalse"  ++ string "False"  ++
+    label ".LCcomma"  ++ string ", "     ++
+    label ".LCstart"  ++ string "["      ++
+    label ".LCend"    ++ string "]"      ++
+    label ".LCs"      ++ string "%s"     ++
+    label ".LCd"      ++ string "%d" ++
+    label ".LCerror" ++ string "Runtime Error"
+  in
+  let string_data2 =
+    Hashtbl.fold (fun value label_name acc ->
+      acc ++ (label label_name) ++ string value
+    ) string_table nop
+  in
   { 
     text = malloc_wrapper ++         (* malloc包裝函數 *)
             print_wrap1 ++           (* int print *)
             print_wrap2 ++           (* bool print *)
             print_value_wrapper ++   (* general print *)
             code;
-    data = inline (format_str1 ^ format_str2);  (* 格式字符串 *)
+    data = string_data ++
+           string_data2;  (* 格式字符串 *)
   }
