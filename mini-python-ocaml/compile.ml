@@ -37,23 +37,29 @@ let print_value_wrapper =
     movq (reg rdi) (reg rbx) ++         (* 保存指針到rbx *)
     movq (ind ~ofs:0 rbx) (reg rdx) ++  (* 獲取類型標籤 *)
     
-    (* 比較類型標籤 *)
+    (* 布林 *)
     cmpq (imm 1) (reg rdx) ++           (* 是布林值? *)
     jne "print_value_not_bool" ++
-    
-    (* 打印布林值 *)
     movq (ind ~ofs:8 rbx) (reg rdi) ++  (* 取出布林值 *)
     call "print_bool" ++
     jmp "print_value_end" ++
     
-    (* 檢查是否為整數 *)
+    (* 整數 *)
     label "print_value_not_bool" ++
     cmpq (imm 2) (reg rdx) ++           (* 是整數? *)
-    jne "print_value_end" ++            (* 如果不是，直接結束 *)
-    
-    (* 打印整數 *)
+    jne "print_value_not_int" ++
     movq (ind ~ofs:8 rbx) (reg rdi) ++  (* 取出整數值 *)
     call "print_int" ++
+    jmp "print_value_end" ++
+
+    (* 字串 *)
+    label "print_value_not_int" ++
+    cmpq (imm 3) (reg rdx) ++           (* 是字串? *)
+    jne "print_value_end" ++            (* 如果不是，直接結束 *)
+    cmpq (imm 3) (reg rdx) ++           (* 是字串? *)
+    jne "print_value_end" ++
+    leaq (ind ~ofs:16 rbx) (rdi) ++ (* 字串內容的位址 *)
+    call "print_string" ++
     
     (* 結束處理 *)
     label "print_value_end" ++
@@ -95,6 +101,22 @@ let print_bool_wrapper =
     movq (imm 0) (reg rax);
     leaq (lab ".LCfalse") (rdi);
     label "print_bool_end";
+    call "printf";
+    movq (reg rbp) (reg rsp);
+    popq rbp;
+    ret;
+  ] in
+  List.fold_left (++) nop code
+let print_string_wrapper =
+  let code = [
+    globl "print_string";
+    label "print_string";
+    pushq (reg rbp);
+    movq (reg rsp) (reg rbp);
+    andq (imm (-16)) (reg rsp);    (* 16-byte 對齊 *)
+    movq (imm 0) (reg rax);        (* printf 需要 rax = 0 *)
+    movq (reg rdi) (reg rsi);      (* 字串指標移到 rsi *)
+    leaq (lab ".LCs") (rdi);       (* 格式字串 "%s" *)
     call "printf";
     movq (reg rbp) (reg rsp);
     popq rbp;
@@ -365,7 +387,9 @@ let rec compile_stmt = function
         call "putchar"
       | TEcst (Cstring _) ->
         compile_expr e ++
-        call "printf" ++
+        compile_expr e ++                (* 計算表達式，結果在rax *)
+        movq (reg rax) (reg rdi) ++
+        call "print_value" ++
         movq (imm 10) (!%rdi) ++
         call "putchar"
       | TEbinop(op, e1, e2) ->
@@ -452,6 +476,7 @@ let file ?debug:(b=false) (p: Ast.tfile) : X86_64.program =
   debug := b;
   let print_wrap1 = print_int_wrapper in
   let print_wrap2 = print_bool_wrapper in
+  let print_wrap3 = print_string_wrapper in
   if !debug then Printf.printf "Compiling file with %d definitions\n" (List.length p);
   let code = List.fold_left (fun code def -> code ++ compile_fun def) nop p in
   let string_data =
@@ -474,6 +499,7 @@ let file ?debug:(b=false) (p: Ast.tfile) : X86_64.program =
     text = malloc_wrapper ++         (* malloc包裝函數 *)
             print_wrap1 ++           (* int print *)
             print_wrap2 ++           (* bool print *)
+            print_wrap3 ++           (* string print *)
             print_value_wrapper ++   (* general print *)
             code;
     data = string_data ++

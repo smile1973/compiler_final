@@ -38,6 +38,18 @@ print_bool_end:
 	movq %rbp, %rsp
 	popq %rbp
 	ret
+	.globl	print_string
+print_string:
+	pushq %rbp
+	movq %rsp, %rbp
+	andq $-16, %rsp
+	movq $0, %rax
+	movq %rdi, %rsi
+	leaq .LCs, %rdi
+	call printf
+	movq %rbp, %rsp
+	popq %rbp
+	ret
 	.globl	print_value
 print_value:
 	pushq %rbp
@@ -52,9 +64,17 @@ print_value:
 	jmp print_value_end
 print_value_not_bool:
 	cmpq $2, %rdx
-	jne print_value_end
+	jne print_value_not_int
 	movq 8(%rbx), %rdi
 	call print_int
+	jmp print_value_end
+print_value_not_int:
+	cmpq $3, %rdx
+	jne print_value_end
+	cmpq $3, %rdx
+	jne print_value_end
+	leaq 16(%rbx), %rdi
+	call print_string
 print_value_end:
 	popq %rbx
 	movq %rbp, %rsp
@@ -64,7 +84,7 @@ print_value_end:
 main:
 	pushq %rbp
 	movq %rsp, %rbp
-	subq $512, %rsp
+	subq $1024, %rsp
 	movq $16, %rdi
 	call my_malloc
 	movq $2, 0(%rax)
@@ -155,6 +175,87 @@ main:
 	call print_value
 	movq $10, %rdi
 	call putchar
+	movq $24, %rdi
+	call my_malloc
+	movq $3, 0(%rax)
+	movq $4, 8(%rax)
+	pushq %rax
+	leaq 16(%rax), %rdi
+	movq $.LC0, %rsi
+	call strcpy
+	popq %rax
+	movq %rax, -208(%rbp)
+	movq -208(%rbp), %rax
+	movq %rax, %rdi
+	call print_value
+	movq $10, %rdi
+	call putchar
+	movq $24, %rdi
+	call my_malloc
+	movq $3, 0(%rax)
+	movq $5, 8(%rax)
+	pushq %rax
+	leaq 16(%rax), %rdi
+	movq $.LC1, %rsi
+	call strcpy
+	popq %rax
+	pushq %rax
+	movq 0(%rax), %rdx
+	movq $16, %rdi
+	call my_malloc
+	movq $2, 0(%rax)
+	popq %rcx
+	cmpq $3, %rdx
+	movq 8(%rcx), %rdx
+	movq %rdx, 8(%rax)
+	movq %rax, %rdi
+	call print_value
+	movq $10, %rdi
+	call putchar
+	movq $24, %rdi
+	call my_malloc
+	movq $3, 0(%rax)
+	movq $5, 8(%rax)
+	pushq %rax
+	leaq 16(%rax), %rdi
+	movq $.LC3, %rsi
+	call strcpy
+	popq %rax
+	movq $24, %rdi
+	call my_malloc
+	movq $3, 0(%rax)
+	movq $5, 8(%rax)
+	pushq %rax
+	leaq 16(%rax), %rdi
+	movq $.LC2, %rsi
+	call strcpy
+	popq %rax
+	movq %rax, %rdi
+	call print_value
+	movq $10, %rdi
+	call putchar
+	movq $24, %rdi
+	call my_malloc
+	movq $3, 0(%rax)
+	movq $5, 8(%rax)
+	pushq %rax
+	leaq 16(%rax), %rdi
+	movq $.LC5, %rsi
+	call strcpy
+	popq %rax
+	call printf
+	movq $24, %rdi
+	call my_malloc
+	movq $3, 0(%rax)
+	movq $5, 8(%rax)
+	pushq %rax
+	leaq 16(%rax), %rdi
+	movq $.LC4, %rsi
+	call strcpy
+	popq %rax
+	call printf
+	movq $10, %rdi
+	call putchar
 	movq $0, %rax
 	movq %rbp, %rsp
 	popq %rbp
@@ -178,3 +279,15 @@ main:
 	.string "Runtime Error"
 .LClen:
 	.string "len: %d\n"
+.LC5:
+	.string "hello"
+.LC3:
+	.string "hello"
+.LC2:
+	.string "hello"
+.LC0:
+	.string "fuck"
+.LC4:
+	.string "world"
+.LC1:
+	.string "eeeee"

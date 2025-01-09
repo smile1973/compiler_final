@@ -18,6 +18,9 @@ print(e)
 print(f)
 print(g)
 
+k = "fuck"
+print(k)
+
 # true
 # print("" == "")
 # print("" < "a")
@@ -31,9 +34,9 @@ print(g)
 # print("abc" <= "ab")
 # # print(1+2)
 # # print(10-(10+9))
-# print(len("eeeee"))
-# print("hello")
-# print("hello" + "world")
+print(len("eeeee"))
+print("hello")
+print("hello" + "world")
 # print(1<2 or len(1))
 # print(10*(9-6+4))
 # print(10//(2+3))

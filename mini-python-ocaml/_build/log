@@ -14,10 +14,4 @@
 #  ; build_dir = In_build_dir "default"
 #  ; instrument_with = []
 #  }
-$ /home/raineko/.opam/default/bin/ocamlc.opt -config > /tmp/dune_934685_output
-$ (cd _build/default && /home/raineko/.opam/default/bin/ocamldep.opt -modules -impl compile.ml) > _build/default/.minipython.eobjs/compile.impl.d
-> File "compile.ml", line 108, characters 0-1:
-> 108 | |              | <- rbp
->       ^
-> Error: Syntax error
-[2]
+$ /home/raineko/.opam/default/bin/ocamlc.opt -config > /tmp/dune_ef50cc_output
