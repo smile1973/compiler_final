@@ -64,188 +64,189 @@ print_value_end:
 main:
 	pushq %rbp
 	movq %rsp, %rbp
-	movq $16, %rdi
+	movq $24, %rdi
 	call my_malloc
-	movq $2, 0(%rax)
-	movq $10, 8(%rax)
+	movq $3, 0(%rax)
+	movq $0, 8(%rax)
+	movb $0, 16(%rax)
 	pushq %rax
-	movq $16, %rdi
+	movq $24, %rdi
 	call my_malloc
-	movq $2, 0(%rax)
-	movq $10, 8(%rax)
-	pushq %rax
-	movq $16, %rdi
-	call my_malloc
-	movq $2, 0(%rax)
-	movq $9, 8(%rax)
+	movq $3, 0(%rax)
+	movq $0, 8(%rax)
+	movb $0, 16(%rax)
 	movq %rax, %rcx
 	popq %rax
 	movq 8(%rax), %rax
 	movq 8(%rcx), %rcx
-	addq %rcx, %rax
+	cmpq %rcx, %rax
+	sete %al
+	movzbq %al, %rax
 	pushq %rax
 	movq $16, %rdi
 	call my_malloc
 	popq %rdx
-	movq $2, 0(%rax)
-	movq %rdx, 8(%rax)
-	movq %rax, %rcx
-	popq %rax
-	movq 8(%rax), %rax
-	movq 8(%rcx), %rcx
-	subq %rcx, %rax
-	pushq %rax
-	movq $16, %rdi
-	call my_malloc
-	popq %rdx
-	movq $2, 0(%rax)
+	movq $1, 0(%rax)
 	movq %rdx, 8(%rax)
 	movq %rax, %rdi
 	call print_value
 	movq $10, %rdi
 	call putchar
-	movq $16, %rdi
+	movq $24, %rdi
 	call my_malloc
-	movq $2, 0(%rax)
-	movq $10, 8(%rax)
+	movq $3, 0(%rax)
+	movq $0, 8(%rax)
+	movb $0, 16(%rax)
 	pushq %rax
-	movq $16, %rdi
+	movq $24, %rdi
 	call my_malloc
-	movq $2, 0(%rax)
-	movq $9, 8(%rax)
+	movq $3, 0(%rax)
+	movq $1, 8(%rax)
 	pushq %rax
-	movq $16, %rdi
-	call my_malloc
-	movq $2, 0(%rax)
-	movq $6, 8(%rax)
+	leaq 16(%rax), %rdi
+	movq $.LC2, %rsi
+	call strcpy
+	popq %rax
 	movq %rax, %rcx
 	popq %rax
 	movq 8(%rax), %rax
 	movq 8(%rcx), %rcx
-	subq %rcx, %rax
+	cmpq %rcx, %rax
+	setl %al
+	movzbq %al, %rax
 	pushq %rax
 	movq $16, %rdi
 	call my_malloc
 	popq %rdx
-	movq $2, 0(%rax)
-	movq %rdx, 8(%rax)
-	pushq %rax
-	movq $16, %rdi
-	call my_malloc
-	movq $2, 0(%rax)
-	movq $4, 8(%rax)
-	movq %rax, %rcx
-	popq %rax
-	movq 8(%rax), %rax
-	movq 8(%rcx), %rcx
-	addq %rcx, %rax
-	pushq %rax
-	movq $16, %rdi
-	call my_malloc
-	popq %rdx
-	movq $2, 0(%rax)
-	movq %rdx, 8(%rax)
-	movq %rax, %rcx
-	popq %rax
-	movq 8(%rax), %rax
-	movq 8(%rcx), %rcx
-	imulq %rcx, %rax
-	pushq %rax
-	movq $16, %rdi
-	call my_malloc
-	popq %rdx
-	movq $2, 0(%rax)
+	movq $1, 0(%rax)
 	movq %rdx, 8(%rax)
 	movq %rax, %rdi
 	call print_value
 	movq $10, %rdi
 	call putchar
-	movq $16, %rdi
+	movq $24, %rdi
 	call my_malloc
-	movq $2, 0(%rax)
-	movq $10, 8(%rax)
+	movq $3, 0(%rax)
+	movq $1, 8(%rax)
 	pushq %rax
-	movq $16, %rdi
+	leaq 16(%rax), %rdi
+	movq $.LC5, %rsi
+	call strcpy
+	popq %rax
+	pushq %rax
+	movq $24, %rdi
 	call my_malloc
-	movq $2, 0(%rax)
+	movq $3, 0(%rax)
 	movq $2, 8(%rax)
 	pushq %rax
+	leaq 16(%rax), %rdi
+	movq $.LC4, %rsi
+	call strcpy
+	popq %rax
+	movq %rax, %rcx
+	popq %rax
+	movq 8(%rax), %rax
+	movq 8(%rcx), %rcx
+	cmpq %rcx, %rax
+	setl %al
+	movzbq %al, %rax
+	pushq %rax
 	movq $16, %rdi
 	call my_malloc
-	movq $2, 0(%rax)
+	popq %rdx
+	movq $1, 0(%rax)
+	movq %rdx, 8(%rax)
+	movq %rax, %rdi
+	call print_value
+	movq $10, %rdi
+	call putchar
+	movq $24, %rdi
+	call my_malloc
+	movq $3, 0(%rax)
+	movq $2, 8(%rax)
+	pushq %rax
+	leaq 16(%rax), %rdi
+	movq $.LC7, %rsi
+	call strcpy
+	popq %rax
+	pushq %rax
+	movq $24, %rdi
+	call my_malloc
+	movq $3, 0(%rax)
+	movq $2, 8(%rax)
+	pushq %rax
+	leaq 16(%rax), %rdi
+	movq $.LC6, %rsi
+	call strcpy
+	popq %rax
+	movq %rax, %rcx
+	popq %rax
+	movq 8(%rax), %rax
+	movq 8(%rcx), %rcx
+	cmpq %rcx, %rax
+	setge %al
+	movzbq %al, %rax
+	pushq %rax
+	movq $16, %rdi
+	call my_malloc
+	popq %rdx
+	movq $1, 0(%rax)
+	movq %rdx, 8(%rax)
+	movq %rax, %rdi
+	call print_value
+	movq $10, %rdi
+	call putchar
+	movq $24, %rdi
+	call my_malloc
+	movq $3, 0(%rax)
+	movq $0, 8(%rax)
+	movb $0, 16(%rax)
+	pushq %rax
+	movq $24, %rdi
+	call my_malloc
+	movq $3, 0(%rax)
+	movq $1, 8(%rax)
+	pushq %rax
+	leaq 16(%rax), %rdi
+	movq $.LC8, %rsi
+	call strcpy
+	popq %rax
+	movq %rax, %rcx
+	popq %rax
+	movq 8(%rax), %rax
+	movq 8(%rcx), %rcx
+	cmpq %rcx, %rax
+	setne %al
+	movzbq %al, %rax
+	pushq %rax
+	movq $16, %rdi
+	call my_malloc
+	popq %rdx
+	movq $1, 0(%rax)
+	movq %rdx, 8(%rax)
+	movq %rax, %rdi
+	call print_value
+	movq $10, %rdi
+	call putchar
+	movq $24, %rdi
+	call my_malloc
+	movq $3, 0(%rax)
 	movq $3, 8(%rax)
-	movq %rax, %rcx
+	pushq %rax
+	leaq 16(%rax), %rdi
+	movq $.LC11, %rsi
+	call strcpy
 	popq %rax
-	movq 8(%rax), %rax
-	movq 8(%rcx), %rcx
-	addq %rcx, %rax
 	pushq %rax
-	movq $16, %rdi
+	movq $24, %rdi
 	call my_malloc
-	popq %rdx
-	movq $2, 0(%rax)
-	movq %rdx, 8(%rax)
-	movq %rax, %rcx
+	movq $3, 0(%rax)
+	movq $3, 8(%rax)
+	pushq %rax
+	leaq 16(%rax), %rdi
+	movq $.LC10, %rsi
+	call strcpy
 	popq %rax
-	movq 8(%rax), %rax
-	movq 8(%rcx), %rcx
-	cmpq $0, %rcx
-	cqto
-	idivq %rcx
-	pushq %rax
-	movq $16, %rdi
-	call my_malloc
-	popq %rdx
-	movq $2, 0(%rax)
-	movq %rdx, 8(%rax)
-	movq %rax, %rdi
-	call print_value
-	movq $10, %rdi
-	call putchar
-	movq $16, %rdi
-	call my_malloc
-	movq $2, 0(%rax)
-	movq $10, 8(%rax)
-	pushq %rax
-	movq $16, %rdi
-	call my_malloc
-	movq $2, 0(%rax)
-	movq $6, 8(%rax)
-	movq %rax, %rcx
-	popq %rax
-	movq 8(%rax), %rax
-	movq 8(%rcx), %rcx
-	cmpq $0, %rcx
-	cqto
-	idivq %rcx
-	movq %rdx, %rax
-	pushq %rax
-	movq $16, %rdi
-	call my_malloc
-	popq %rdx
-	movq $2, 0(%rax)
-	movq %rdx, 8(%rax)
-	movq %rax, %rdi
-	call print_value
-	movq $10, %rdi
-	call putchar
-	movq $16, %rdi
-	call my_malloc
-	movq $2, 0(%rax)
-	movq $10, 8(%rax)
-	movq %rax, %rdi
-	call print_value
-	movq $10, %rdi
-	call putchar
-	movq $16, %rdi
-	call my_malloc
-	movq $2, 0(%rax)
-	movq $1, 8(%rax)
-	pushq %rax
-	movq $16, %rdi
-	call my_malloc
-	movq $2, 0(%rax)
-	movq $2, 8(%rax)
 	movq %rax, %rcx
 	popq %rax
 	movq 8(%rax), %rax
@@ -263,93 +264,25 @@ main:
 	call print_value
 	movq $10, %rdi
 	call putchar
-	movq $16, %rdi
+	movq $24, %rdi
 	call my_malloc
-	movq $2, 0(%rax)
+	movq $3, 0(%rax)
 	movq $1, 8(%rax)
 	pushq %rax
-	movq $16, %rdi
-	call my_malloc
-	movq $2, 0(%rax)
-	movq $1, 8(%rax)
-	movq %rax, %rcx
+	leaq 16(%rax), %rdi
+	movq $.LC13, %rsi
+	call strcpy
 	popq %rax
-	movq 8(%rax), %rax
-	movq 8(%rcx), %rcx
-	cmpq %rcx, %rax
-	sete %al
-	movzbq %al, %rax
 	pushq %rax
-	movq $16, %rdi
+	movq $24, %rdi
 	call my_malloc
-	popq %rdx
-	movq $1, 0(%rax)
-	movq %rdx, 8(%rax)
-	movq %rax, %rdi
-	call print_value
-	movq $10, %rdi
-	call putchar
-	movq $16, %rdi
-	call my_malloc
-	movq $2, 0(%rax)
+	movq $3, 0(%rax)
 	movq $1, 8(%rax)
 	pushq %rax
-	movq $16, %rdi
-	call my_malloc
-	movq $2, 0(%rax)
-	movq $2, 8(%rax)
-	movq %rax, %rcx
+	leaq 16(%rax), %rdi
+	movq $.LC12, %rsi
+	call strcpy
 	popq %rax
-	movq 8(%rax), %rax
-	movq 8(%rcx), %rcx
-	cmpq %rcx, %rax
-	setne %al
-	movzbq %al, %rax
-	pushq %rax
-	movq $16, %rdi
-	call my_malloc
-	popq %rdx
-	movq $1, 0(%rax)
-	movq %rdx, 8(%rax)
-	movq %rax, %rdi
-	call print_value
-	movq $10, %rdi
-	call putchar
-	movq $16, %rdi
-	call my_malloc
-	movq $2, 0(%rax)
-	movq $1, 8(%rax)
-	pushq %rax
-	movq $16, %rdi
-	call my_malloc
-	movq $2, 0(%rax)
-	movq $1, 8(%rax)
-	movq %rax, %rcx
-	popq %rax
-	movq 8(%rax), %rax
-	movq 8(%rcx), %rcx
-	cmpq %rcx, %rax
-	setne %al
-	movzbq %al, %rax
-	pushq %rax
-	movq $16, %rdi
-	call my_malloc
-	popq %rdx
-	movq $1, 0(%rax)
-	movq %rdx, 8(%rax)
-	movq %rax, %rdi
-	call print_value
-	movq $10, %rdi
-	call putchar
-	movq $16, %rdi
-	call my_malloc
-	movq $2, 0(%rax)
-	movq $1, 8(%rax)
-	pushq %rax
-	movq $16, %rdi
-	call my_malloc
-	movq $2, 0(%rax)
-	movq $1, 8(%rax)
 	movq %rax, %rcx
 	popq %rax
 	movq 8(%rax), %rax
@@ -367,325 +300,21 @@ main:
 	call print_value
 	movq $10, %rdi
 	call putchar
-	movq $16, %rdi
+	movq $24, %rdi
 	call my_malloc
-	movq $2, 0(%rax)
-	movq $1, 8(%rax)
-	pushq %rax
-	movq $16, %rdi
-	call my_malloc
-	movq $2, 0(%rax)
-	movq $1, 8(%rax)
-	movq %rax, %rcx
-	popq %rax
-	movq 8(%rax), %rax
-	movq 8(%rcx), %rcx
-	cmpq %rcx, %rax
-	setge %al
-	movzbq %al, %rax
-	pushq %rax
-	movq $16, %rdi
-	call my_malloc
-	popq %rdx
-	movq $1, 0(%rax)
-	movq %rdx, 8(%rax)
-	movq %rax, %rdi
-	call print_value
-	movq $10, %rdi
-	call putchar
-	movq $16, %rdi
-	call my_malloc
-	movq $2, 0(%rax)
-	movq $1, 8(%rax)
-	pushq %rax
-	movq $16, %rdi
-	call my_malloc
-	movq $2, 0(%rax)
-	movq $1, 8(%rax)
-	movq %rax, %rcx
-	popq %rax
-	movq 8(%rax), %rax
-	movq 8(%rcx), %rcx
-	cmpq %rcx, %rax
-	setle %al
-	movzbq %al, %rax
-	pushq %rax
-	movq $16, %rdi
-	call my_malloc
-	popq %rdx
-	movq $1, 0(%rax)
-	movq %rdx, 8(%rax)
-	movq %rax, %rdi
-	call print_value
-	movq $10, %rdi
-	call putchar
-	movq $16, %rdi
-	call my_malloc
-	movq $2, 0(%rax)
-	movq $1, 8(%rax)
-	pushq %rax
-	movq $16, %rdi
-	call my_malloc
-	movq $2, 0(%rax)
-	movq $1, 8(%rax)
-	movq %rax, %rcx
-	popq %rax
-	movq 8(%rax), %rax
-	movq 8(%rcx), %rcx
-	cmpq %rcx, %rax
-	setl %al
-	movzbq %al, %rax
-	pushq %rax
-	movq $16, %rdi
-	call my_malloc
-	popq %rdx
-	movq $1, 0(%rax)
-	movq %rdx, 8(%rax)
-	movq %rax, %rdi
-	call print_value
-	movq $10, %rdi
-	call putchar
-	movq $16, %rdi
-	call my_malloc
-	movq $1, 0(%rax)
-	movq $1, 8(%rax)
-	movq %rax, %rdi
-	call print_value
-	movq $10, %rdi
-	call putchar
-	movq $16, %rdi
-	call my_malloc
-	movq $1, 0(%rax)
+	movq $3, 0(%rax)
 	movq $0, 8(%rax)
-	movq %rax, %rdi
-	call print_value
-	movq $10, %rdi
-	call putchar
-	movq $16, %rdi
+	movb $0, 16(%rax)
+	pushq %rax
+	movq $24, %rdi
 	call my_malloc
-	movq $1, 0(%rax)
+	movq $3, 0(%rax)
 	movq $1, 8(%rax)
 	pushq %rax
-	movq $16, %rdi
-	call my_malloc
-	movq $1, 0(%rax)
-	movq $0, 8(%rax)
-	movq %rax, %rcx
+	leaq 16(%rax), %rdi
+	movq $.LC14, %rsi
+	call strcpy
 	popq %rax
-	movq 8(%rax), %rax
-	movq 8(%rcx), %rcx
-	cmpq $0, %rax
-	je .LC0
-	andq %rcx, %rax
-	jmp .LC0
-.LC0:
-	pushq %rax
-	movq $16, %rdi
-	call my_malloc
-	popq %rdx
-	movq $1, 0(%rax)
-	movq %rdx, 8(%rax)
-	movq %rax, %rdi
-	call print_value
-	movq $10, %rdi
-	call putchar
-	movq $16, %rdi
-	call my_malloc
-	movq $1, 0(%rax)
-	movq $1, 8(%rax)
-	pushq %rax
-	movq $16, %rdi
-	call my_malloc
-	movq $1, 0(%rax)
-	movq $0, 8(%rax)
-	movq %rax, %rcx
-	popq %rax
-	movq 8(%rax), %rax
-	movq 8(%rcx), %rcx
-	cmpq $0, %rax
-	jne .LC1
-	orq %rcx, %rax
-	jmp .LC1
-.LC1:
-	pushq %rax
-	movq $16, %rdi
-	call my_malloc
-	popq %rdx
-	movq $1, 0(%rax)
-	movq %rdx, 8(%rax)
-	movq %rax, %rdi
-	call print_value
-	movq $10, %rdi
-	call putchar
-	movq $16, %rdi
-	call my_malloc
-	movq $1, 0(%rax)
-	movq $0, 8(%rax)
-	pushq %rax
-	movq $16, %rdi
-	call my_malloc
-	movq $1, 0(%rax)
-	movq $1, 8(%rax)
-	movq %rax, %rcx
-	popq %rax
-	movq 8(%rax), %rax
-	movq 8(%rcx), %rcx
-	cmpq $0, %rax
-	jne .LC2
-	orq %rcx, %rax
-	jmp .LC2
-.LC2:
-	pushq %rax
-	movq $16, %rdi
-	call my_malloc
-	popq %rdx
-	movq $1, 0(%rax)
-	movq %rdx, 8(%rax)
-	movq %rax, %rdi
-	call print_value
-	movq $10, %rdi
-	call putchar
-	movq $16, %rdi
-	call my_malloc
-	movq $1, 0(%rax)
-	movq $0, 8(%rax)
-	pushq %rax
-	movq $16, %rdi
-	call my_malloc
-	movq $1, 0(%rax)
-	movq $0, 8(%rax)
-	movq %rax, %rcx
-	popq %rax
-	movq 8(%rax), %rax
-	movq 8(%rcx), %rcx
-	cmpq $0, %rax
-	jne .LC3
-	orq %rcx, %rax
-	jmp .LC3
-.LC3:
-	pushq %rax
-	movq $16, %rdi
-	call my_malloc
-	popq %rdx
-	movq $1, 0(%rax)
-	movq %rdx, 8(%rax)
-	movq %rax, %rdi
-	call print_value
-	movq $10, %rdi
-	call putchar
-	movq $16, %rdi
-	call my_malloc
-	movq $1, 0(%rax)
-	movq $1, 8(%rax)
-	pushq %rax
-	movq $16, %rdi
-	call my_malloc
-	movq $1, 0(%rax)
-	movq $0, 8(%rax)
-	movq %rax, %rcx
-	popq %rax
-	movq 8(%rax), %rax
-	movq 8(%rcx), %rcx
-	cmpq %rcx, %rax
-	sete %al
-	movzbq %al, %rax
-	pushq %rax
-	movq $16, %rdi
-	call my_malloc
-	popq %rdx
-	movq $1, 0(%rax)
-	movq %rdx, 8(%rax)
-	movq %rax, %rdi
-	call print_value
-	movq $10, %rdi
-	call putchar
-	movq $16, %rdi
-	call my_malloc
-	movq $1, 0(%rax)
-	movq $1, 8(%rax)
-	pushq %rax
-	movq $16, %rdi
-	call my_malloc
-	movq $1, 0(%rax)
-	movq $0, 8(%rax)
-	movq %rax, %rcx
-	popq %rax
-	movq 8(%rax), %rax
-	movq 8(%rcx), %rcx
-	cmpq %rcx, %rax
-	setne %al
-	movzbq %al, %rax
-	pushq %rax
-	movq $16, %rdi
-	call my_malloc
-	popq %rdx
-	movq $1, 0(%rax)
-	movq %rdx, 8(%rax)
-	movq %rax, %rdi
-	call print_value
-	movq $10, %rdi
-	call putchar
-	movq $16, %rdi
-	call my_malloc
-	movq $1, 0(%rax)
-	movq $1, 8(%rax)
-	pushq %rax
-	movq $16, %rdi
-	call my_malloc
-	movq $1, 0(%rax)
-	movq $0, 8(%rax)
-	movq %rax, %rcx
-	popq %rax
-	movq 8(%rax), %rax
-	movq 8(%rcx), %rcx
-	cmpq %rcx, %rax
-	setl %al
-	movzbq %al, %rax
-	pushq %rax
-	movq $16, %rdi
-	call my_malloc
-	popq %rdx
-	movq $1, 0(%rax)
-	movq %rdx, 8(%rax)
-	movq %rax, %rdi
-	call print_value
-	movq $10, %rdi
-	call putchar
-	movq $16, %rdi
-	call my_malloc
-	movq $1, 0(%rax)
-	movq $1, 8(%rax)
-	pushq %rax
-	movq $16, %rdi
-	call my_malloc
-	movq $1, 0(%rax)
-	movq $0, 8(%rax)
-	movq %rax, %rcx
-	popq %rax
-	movq 8(%rax), %rax
-	movq 8(%rcx), %rcx
-	cmpq %rcx, %rax
-	setle %al
-	movzbq %al, %rax
-	pushq %rax
-	movq $16, %rdi
-	call my_malloc
-	popq %rdx
-	movq $1, 0(%rax)
-	movq %rdx, 8(%rax)
-	movq %rax, %rdi
-	call print_value
-	movq $10, %rdi
-	call putchar
-	movq $16, %rdi
-	call my_malloc
-	movq $1, 0(%rax)
-	movq $1, 8(%rax)
-	pushq %rax
-	movq $16, %rdi
-	call my_malloc
-	movq $1, 0(%rax)
-	movq $0, 8(%rax)
 	movq %rax, %rcx
 	popq %rax
 	movq 8(%rax), %rax
@@ -703,21 +332,31 @@ main:
 	call print_value
 	movq $10, %rdi
 	call putchar
-	movq $16, %rdi
+	movq $24, %rdi
 	call my_malloc
-	movq $1, 0(%rax)
-	movq $1, 8(%rax)
+	movq $3, 0(%rax)
+	movq $3, 8(%rax)
 	pushq %rax
-	movq $16, %rdi
+	leaq 16(%rax), %rdi
+	movq $.LC17, %rsi
+	call strcpy
+	popq %rax
+	pushq %rax
+	movq $24, %rdi
 	call my_malloc
-	movq $1, 0(%rax)
-	movq $0, 8(%rax)
+	movq $3, 0(%rax)
+	movq $2, 8(%rax)
+	pushq %rax
+	leaq 16(%rax), %rdi
+	movq $.LC16, %rsi
+	call strcpy
+	popq %rax
 	movq %rax, %rcx
 	popq %rax
 	movq 8(%rax), %rax
 	movq 8(%rcx), %rcx
 	cmpq %rcx, %rax
-	setge %al
+	setle %al
 	movzbq %al, %rax
 	pushq %rax
 	movq $16, %rdi
@@ -727,16 +366,6 @@ main:
 	movq %rdx, 8(%rax)
 	movq %rax, %rdi
 	call print_value
-	movq $10, %rdi
-	call putchar
-	movq $.LC4, %rdi
-	call printf
-	movq $10, %rdi
-	call putchar
-	movq $.LC6, %rdi
-	call printf
-	movq $.LC5, %rdi
-	call printf
 	movq $10, %rdi
 	call putchar
 	movq $0, %rax
@@ -760,9 +389,41 @@ main:
 	.string "%d"
 .LCerror:
 	.string "Runtime Error"
-.LC6:
-	.string "hello"
-.LC4:
-	.string "hello"
+.LClen:
+	.string "len: %d\n"
+.LC15:
+	.string ""
+.LC9:
+	.string ""
+.LC3:
+	.string ""
+.LC1:
+	.string ""
+.LC0:
+	.string ""
+.LC13:
+	.string "a"
+.LC8:
+	.string "a"
 .LC5:
-	.string "fox"
+	.string "a"
+.LC2:
+	.string "a"
+.LC14:
+	.string "b"
+.LC12:
+	.string "b"
+.LC16:
+	.string "ab"
+.LC7:
+	.string "ab"
+.LC6:
+	.string "ab"
+.LC4:
+	.string "da"
+.LC17:
+	.string "abc"
+.LC11:
+	.string "abc"
+.LC10:
+	.string "abc"

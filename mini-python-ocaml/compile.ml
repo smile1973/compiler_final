@@ -60,7 +60,6 @@ let print_value_wrapper =
     ret
   in
   code
-
 let print_int_wrapper =
   let code = [
     globl "print_int";
@@ -116,24 +115,93 @@ let create_bool b =
   movq (imm 1) (ind ~ofs:0 rax) ++  (* 類型標籤 1 表示布林值 *)
   movq (imm64 value) (ind ~ofs:8 rax)
 
-
 let label_counter = ref 0
 let fresh_unique_label () =
   let label = Printf.sprintf ".LC%d" !label_counter in
   incr label_counter;
   label    
 
-let compile_string str =
-  let label_name = fresh_unique_label () in
-  Hashtbl.add string_table str label_name;
-  movq (ilab label_name) (reg rdi)
-
+let create_string str =
+  let len = String.length str in
+  (* 計算需要的總空間：8(tag) + 8(length) + string_length + 1(null terminator) *)
+  let size = 16 + len + 1 in
+  let aligned_size = (size + 7) land (-8) in
+  
+  (* 為字串內容創建一個新的標籤 *)
+  let str_label = fresh_unique_label () in
+  
+  (* 將字串和標籤加入到字串表中 *)
+  Hashtbl.add string_table str str_label;
+  
+  (* 分配記憶體 *)
+  movq (imm aligned_size) (reg rdi) ++
+  call "my_malloc" ++
+  
+  (* 設置類型標籤(3表示字串) *)
+  movq (imm 3) (ind ~ofs:0 rax) ++
+  
+  (* 設置字串長度 *)
+  movq (imm64 (Int64.of_int len)) (ind ~ofs:8 rax) ++
+  
+  (* 如果是空字串，直接設置結尾的null *)
+  (if len = 0 then
+    movb (imm 0) (ind ~ofs:16 rax)
+  else
+    (* 複製字串內容 *)
+    pushq (reg rax) ++  (* 保存指標 *)
+    leaq (ind ~ofs:16 rax) (rdi) ++  (* 目標地址 *)
+    movq (ilab str_label) (reg rsi) ++  (* 源地址 *)
+    call "strcpy" ++
+    popq rax  (* 恢復指標 *)
+  )
 (* 編譯表達式 *)
 let rec compile_expr = function
   | TEcst (Cint n) -> create_int n
   | TEcst (Cbool b) -> create_bool b
-  | TEcst (Cstring s) -> compile_string s
+  | TEcst (Cstring s) -> create_string s
   | TEbinop (op, e1, e2) ->
+    let compile_and e1 e2 =
+      compile_expr e1 ++                   (* 計算第一個表達式，結果在 rax *)
+      pushq (reg rax) ++                   (* 保存第一個結果到棧上 *)
+      compile_expr e2 ++                   (* 計算第二個表達式，結果在 rax *)
+      movq (reg rax) (reg rcx) ++          (* 保存第二個結果到 rcx *)
+      popq rax ++                          (* 恢復第一個結果到 rax *)
+      movq (ind ~ofs:8 rax) (reg rax) ++   (* 取出第一個數的值 *)
+      movq (ind ~ofs:8 rcx) (reg rcx) ++   (* 取出第二個數的值 *)
+      let lbl_end = fresh_unique_label () in
+        cmpq (imm 0) (reg rax) ++
+        je lbl_end ++
+        andq (reg rcx) (reg rax) ++
+        jmp lbl_end ++
+      
+      label lbl_end ++
+      pushq (reg rax) ++                   (* 保存結果 *)
+      movq (imm 16) (reg rdi) ++           (* 分配16字節空間 *)
+      call "my_malloc" ++
+      popq rdx ++                          (* 恢復結果 *)
+      movq (imm 1) (ind ~ofs:0 rax) ++     (* 設置類型標籤為布林值 *)
+      movq (reg rdx) (ind ~ofs:8 rax) in
+    let compile_or e1 e2 =
+      compile_expr e1 ++                   (* 計算第一個表達式，結果在 rax *)
+      pushq (reg rax) ++                   (* 保存第一個結果到棧上 *)
+      compile_expr e2 ++                   (* 計算第二個表達式，結果在 rax *)
+      movq (reg rax) (reg rcx) ++          (* 保存第二個結果到 rcx *)
+      popq rax ++                          (* 恢復第一個結果到 rax *)
+      movq (ind ~ofs:8 rax) (reg rax) ++   (* 取出第一個數的值 *)
+      movq (ind ~ofs:8 rcx) (reg rcx) ++   (* 取出第二個數的值 *)
+      let lbl_end = fresh_unique_label () in
+        cmpq (imm 0) (reg rax) ++
+        jne lbl_end ++
+        orq (reg rcx) (reg rax) ++
+        jmp lbl_end ++
+      
+      label lbl_end ++
+      pushq (reg rax) ++                   (* 保存結果 *)
+      movq (imm 16) (reg rdi) ++           (* 分配16字節空間 *)
+      call "my_malloc" ++
+      popq rdx ++                          (* 恢復結果 *)
+      movq (imm 1) (ind ~ofs:0 rax) ++     (* 設置類型標籤為布林值 *)
+      movq (reg rdx) (ind ~ofs:8 rax) in
     let compile_compare op_type e1 e2 =
       compile_expr e1 ++                   (* 計算第一個表達式，結果在 rax *)
       pushq (reg rax) ++                   (* 保存第一個結果到棧上 *)
@@ -188,6 +256,58 @@ let rec compile_expr = function
       popq rdx ++                          (* 恢復結果 *)
       movq (imm 1) (ind ~ofs:0 rax) ++     (* 設置類型標籤為布林值 *)
       movq (reg rdx) (ind ~ofs:8 rax) in
+    (* let compile_compare_string op_type e1 e2 =
+      compile_expr e1 ++                   (* 計算第一個表達式，結果在 rax *)
+      pushq (reg rax) ++                   (* 保存第一個結果到棧上 *)
+      compile_expr e2 ++                   (* 計算第二個表達式，結果在 rax *)
+      movq (reg rax) (reg rcx) ++          (* 保存第二個結果到 rcx *)
+      popq rax ++                          (* 恢復第一個結果到 rax *)
+    
+      (* 設置正確的字串起始地址 *)
+      leaq (ind ~ofs:16 rax) (rdi) ++      (* 字串1的內容地址放入 rdi *)
+      leaq (ind ~ofs:16 rcx) (rsi) ++      (* 字串2的內容地址放入 rsi *)
+    
+      (* 確保棧對齊，調用 strcmp *)
+      subq (imm 8) (reg rsp) ++            (* 棧對齊到 16 字節 *)
+      call "strcmp" ++
+      addq (imm 8) (reg rsp) ++            (* 恢復棧對齊 *)
+    
+      (* 根據 strcmp 的返回值設置比較結果 *)
+      (match op_type with
+      | "eq" ->
+          testq (reg rax) (reg rax) ++      (* 比較 rax 是否為 0 *)
+          sete (reg al) ++                  (* 如果相等，設置 al = 1 *)
+          movzbq (reg al) (rax)             (* 擴展 al 到 rax *)
+      | "neq" ->
+          testq (reg rax) (reg rax) ++      (* 比較 rax 是否為 0 *)
+          setne (reg al) ++                 (* 如果不相等，設置 al = 1 *)
+          movzbq (reg al) (rax)
+      | "lt" ->
+          cmpq (imm 0) (reg rax) ++         (* 比較 rax 是否小於 0 *)
+          setl (reg al) ++                  (* 如果 rax < 0，設置 al = 1 *)
+          movzbq (reg al) (rax)
+      | "le" ->
+          cmpq (imm 0) (reg rax) ++         (* 比較 rax 是否小於等於 0 *)
+          setle (reg al) ++                 (* 如果 rax <= 0，設置 al = 1 *)
+          movzbq (reg al) (rax)
+      | "gt" ->
+          cmpq (imm 0) (reg rax) ++         (* 比較 rax 是否大於 0 *)
+          setg (reg al) ++                  (* 如果 rax > 0，設置 al = 1 *)
+          movzbq (reg al) (rax)
+      | "ge" ->
+          cmpq (imm 0) (reg rax) ++         (* 比較 rax 是否大於等於 0 *)
+          setge (reg al) ++                 (* 如果 rax >= 0，設置 al = 1 *)
+          movzbq (reg al) (rax)
+      | _ -> failwith "error: runtime error") ++
+    
+      (* 建立和返回布林值物件 *)
+      pushq (reg rax) ++                   (* 保存比較結果 *)
+      movq (imm 16) (reg rdi) ++           (* 分配16字節空間 *)
+      call "my_malloc" ++
+      popq rdx ++                          (* 恢復比較結果 *)
+      movq (imm 1) (ind ~ofs:0 rax) ++     (* 設置類型標籤為布林值 *)
+      movq (reg rdx) (ind ~ofs:8 rax) in    (* 存儲比較結果 *)
+     *)
     let compile_binary_op op_type e1 e2 =
       compile_expr e1 ++                   (* 計算第一個表達式，結果在 rax *)
       pushq (reg rax) ++                   (* 保存第一個結果到棧上 *)
@@ -230,8 +350,8 @@ let rec compile_expr = function
     | Bge -> compile_compare "ge" e1 e2
     | Blt -> compile_compare "lt" e1 e2
     | Ble -> compile_compare "le" e1 e2
-    | Band -> compile_compare "and" e1 e2
-    | Bor -> compile_compare "or" e1 e2
+    | Band -> compile_and e1 e2
+    | Bor -> compile_or e1 e2
     end
   | TElist expr_list -> 
     movq (ilab ".LCstart") (!%rdi) ++ call "printf" ++
@@ -263,6 +383,21 @@ let rec compile_expr = function
       List.fold_left (fun code e -> code ++ e) nop elements_code ++
       movq (ilab ".LCend") (!%rdi) ++
       call "printf" 
+  | TEcall (fn, [arg]) when fn.fn_name = "len" ->
+    compile_expr arg ++
+    pushq (reg rax) ++
+    movq (ind ~ofs:0 rax) (reg rdx) ++
+    
+    movq (imm 16) (reg rdi) ++
+    call "my_malloc" ++
+    movq (imm 2) (ind ~ofs:0 rax) ++  (* int *)
+    popq rcx ++
+    
+    (* 目前先處理字串的情況 *)
+    cmpq (imm 3) (reg rdx) ++  (* 是字串? *)
+    movq (ind ~ofs:8 rcx) (reg rdx) ++  (* 取得字串長度 *)
+    movq (reg rdx) (ind ~ofs:8 rax)     (* 儲存長度 *)
+
   | _ -> failwith "Unsupported expression type"
 
 (* 編譯語句 *)
@@ -270,13 +405,7 @@ let rec compile_stmt = function
   | TSprint e ->
     let rec print_code e =
       begin match e with
-      | TEcst (Cint _) ->
-        compile_expr e ++                (* 計算表達式，結果在rax *)
-        movq (reg rax) (reg rdi) ++
-        call "print_value" ++
-        movq (imm 10) (!%rdi) ++
-        call "putchar"
-      | TEcst (Cbool _) ->
+      | TEcst (Cint _) | TEcst (Cbool _)->
         compile_expr e ++                (* 計算表達式，結果在rax *)
         movq (reg rax) (reg rdi) ++
         call "print_value" ++
@@ -288,34 +417,38 @@ let rec compile_stmt = function
         movq (imm 10) (!%rdi) ++
         call "putchar"
       | TEbinop(op, e1, e2) ->
-        begin match e1 with 
-        | TEcst (Cint _) ->
-          compile_expr e ++
-          movq (reg rax) (reg rdi) ++
-          call "print_value" ++
-          movq (imm 10) (!%rdi) ++
-          call "putchar"
-        | TEcst (Cbool _) ->
-          compile_expr e ++
-          movq (reg rax) (reg rdi) ++
-          call "print_value" ++
-          movq (imm 10) (!%rdi) ++
-          call "putchar"
-        | TEcst (Cstring _) ->
-          if !debug then Printf.printf "Compiling print statement\n";
+        begin match op with 
+        | Badd when (match e1 with TEcst (Cstring _) -> true | _ -> false) ->
+          (* 處理字串拼接 *)
           compile_expr e1 ++
           call "printf" ++
           compile_expr e2 ++
           call "printf" ++
           movq (imm 10) (!%rdi) ++
           call "putchar"
-        | TElist _ ->
-          compile_expr e1 ++
-          compile_expr e2
-        | _ -> nop
+        | Beq | Bneq | Bgt | Bge | Blt | Ble | Band | Bor ->
+          (* 處理比較運算和布林運算 *)
+          compile_expr e ++
+          movq (reg rax) (reg rdi) ++
+          call "print_value" ++
+          movq (imm 10) (!%rdi) ++
+          call "putchar"
+        | _ ->
+          (* 處理其他算術運算 *)
+          compile_expr e ++
+          movq (reg rax) (reg rdi) ++
+          call "print_value" ++
+          movq (imm 10) (!%rdi) ++
+          call "putchar"
         end
       | TElist (lst) ->
         compile_expr e ++
+        movq (imm 10) (!%rdi) ++
+        call "putchar"
+      | TEcall (fn, arg) when fn.fn_name = "len" ->
+        compile_expr e ++
+        movq (reg rax) (reg rdi) ++
+        call "print_value" ++
         movq (imm 10) (!%rdi) ++
         call "putchar"
       | _ -> nop
@@ -357,7 +490,8 @@ let file ?debug:(b=false) (p: Ast.tfile) : X86_64.program =
     label ".LCend"    ++ string "]"      ++
     label ".LCs"      ++ string "%s"     ++
     label ".LCd"      ++ string "%d" ++
-    label ".LCerror" ++ string "Runtime Error"
+    label ".LCerror" ++ string "Runtime Error" ++
+    label ".LClen"    ++ string "len: %d\n"
   in
   let string_data2 =
     Hashtbl.fold (fun value label_name acc ->
