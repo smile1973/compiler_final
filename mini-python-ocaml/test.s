@@ -71,8 +71,6 @@ print_value_not_bool:
 print_value_not_int:
 	cmpq $3, %rdx
 	jne print_value_end
-	cmpq $3, %rdx
-	jne print_value_end
 	leaq 16(%rbx), %rdi
 	call print_string
 print_value_end:

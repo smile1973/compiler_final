@@ -56,8 +56,6 @@ let print_value_wrapper =
     label "print_value_not_int" ++
     cmpq (imm 3) (reg rdx) ++           (* 是字串? *)
     jne "print_value_end" ++            (* 如果不是，直接結束 *)
-    cmpq (imm 3) (reg rdx) ++           (* 是字串? *)
-    jne "print_value_end" ++
     leaq (ind ~ofs:16 rbx) (rdi) ++ (* 字串內容的位址 *)
     call "print_string" ++
     
