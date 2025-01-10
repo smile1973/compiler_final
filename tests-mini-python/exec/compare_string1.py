@@ -1,7 +1,7 @@
 # true
 print("" == "")
 print("" < "a")
-print("b" < "c")
+print("a" < "da")
 print("ab" >= "ab")
 print("" != "a")
 print("abc" == "abc")

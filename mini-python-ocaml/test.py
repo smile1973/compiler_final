@@ -1,7 +1,11 @@
 
 
-print(len(list(range(7))))
-# def foo():
+print([1, [2,3], 4] != [1, 2, 3])
+print([1, [2,3], 4] == [1, [2,3], 3])
+print([1, [2,3], 4] == [1, [2,3], 4])
+x = 1
+print([x,x,x] == [x,[x],x])
+
 #     x = 1
 # print(foo())
 # print(foo() == foo())

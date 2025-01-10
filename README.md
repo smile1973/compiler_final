@@ -1,39 +1,147 @@
+# Snakecharmer: Mini Python 編譯器項目
+> 將 Python 代碼優雅地轉化為 x86-64 彙編
 
-# Tests for the Mini Python project
+## 團隊成員
+- 王品翔 (111820023)
+- 楊承諭 (111820030)  
+- 江子文 (111820033)
 
-Tests are organized in various categories:
+## 1. 項目概述
 
-    syntax/bad/    lexing or parsing must fail
-    typing/bad/    type checking must fail
-    typing/good/   type checking must pass
-    exec-fail/     compiles successfully but fails at runtime
-    exec/          compiles successfully, executes successfully,
-                   and output conforms to file .out
+### 簡介
+Snakecharmer 是一個精巧的 Mini Python 編譯器，它能夠將 Python 的一個子集優雅地"馴服"為 x86-64 彙編代碼。就像馴蛇人能夠掌控蛇的動作，我們的編譯器也能夠精確地控制和轉換 Python 代碼的執行流程。
 
-Tests are cumulative, i.e.,
+### 完成度總結
+- 基本數據類型: int, bool, string, list ✓
+- 運算符: 算術運算(+,-,*,/,%), 比較運算(<,<=,>,>=,==,!=), 邏輯運算(and,or) ✓
+- 控制結構: for 循環 ✓
+- 內建函數: len() ✓
+- 錯誤處理: 運行時錯誤檢查 ✓
 
-- files in `typing/bad/`, `exec-fail/`, and `exec/` can be used for the
-  category `syntax/good/`
+## 2. 技術選擇
 
-- files in `exec-fail/` and `exec/` can be used for the category
-  `typing/good/`
+### 使用的技術棧
+- 實現語言: OCaml
+- 記憶體管理: 使用 malloc 進行堆分配
 
-# Testing your compiler
+### 關鍵決策說明
+1. 記憶體佈局:
+   - 每個值佔用 16 字節
+   - 前 8 字節存放類型標籤
+   - 後 8 字節存放實際數據
+2. 堆棧與寄存器使用:
+   - 堆棧對齊: 調用庫函數時需確保 16 字節對齊
+   - 使用堆棧存儲中間計算結果
+   - 參數通過堆棧傳遞
+   - 返回值使用 %rax 寄存器
+2. 類型標籤:
+   - None: 0
+   - Bool: 1
+   - Int: 2
+   - String: 3
+   - List: 4
 
-A script `test` is provided to run your compiler on those tests.
-Use
+## 3. 功能實現
 
-    test -2 path-to-your-compiler
+### 基本功能
+1. 數值運算:
+   - 支持整數的加減乘除和取模運算
+   - 支持一元負號運算
+   - 所有運算都基於有符號 64 位整數
+2. 布爾運算:
+   - 支持 and/or/not 運算
+   - 支持所有比較運算符 (<,<=,>,>=,==,!=)
+   - False/0/空字符串/空列表被視為假值
+   - 其他值被視為真值
+3. 列表操作:
+   - 支持列表創建 [e1, e2, ...]
+   - 支持索引訪問 l[i] 和賦值 l[i] = e
+   - 支持 list(range(n)) 創建整數序列
+4. 字符串:
+   - 支持字符串常量和轉義序列 (\", \n)
+   - 支持字符串連接操作 (+)
+   - 支持字符串比較(字典序)
+5. 多維列表操作:
+   - 支持嵌套列表訪問 (如 x[1][2])
+   - 遞歸處理嵌套的列表訪問
+   - 為每層訪問生成索引檢查代碼
+6. 短路求值:
+   - and/or 運算符的短路求值優化
+   - 使用條件跳轉實現
+   - 避免不必要的表達式求值
 
-to run the type checking tests. Your compiler is called with command
-line option `--type-only` and the filename, and the exit code is used
-to figure out the behavior of your compiler.
+### 錯誤處理
+- 運行時檢查:
+  - 除零錯誤
+  - 列表索引越界
+  - 類型錯誤
+  - len() 參數類型檢查
 
-Use
+### 測試案例
+參考 tests-mini-python/exec/ tests-mini-python/exec-fail/ tests-mini-python/typing/ 中的測試用例列表
+### 語言特性補充
+1. 作用域規則:
+   - 變量作用域為靜態定義
+   - 變量可以是函數局部變量或全局變量
+   - 局部變量通過參數或賦值引入
+   - 全局變量通過頂層代碼賦值引入
+   - 不支持變量遮蔽(shadowing)
 
-    test -3 path-to-your-compiler
+2. 內建函數限制:
+   - list(range()) 只能作為複合表達式使用
+   - range() 參數必須為非負整數
 
-to run the code generation tests. Your compiler is called with the
-filename, the generated code is then compiled with `gcc`, the
-executable is run, and the standard output is compared to the expected
-output.
+### 與 Python 的主要差異
+1. 算術運算: 使用有符號 64 位整數，而非 Python 的無限精度
+2. 列表顯示: 字符串在列表中顯示時不帶引號
+3. 不支持字符串/列表與整數相乘
+4. 不支持負數索引訪問
+
+
+
+## 5. 已知問題
+
+### 現存問題
+1. 字符串比較可能存在記憶體問題
+2. 某些錯誤情況下的錯誤信息不夠具體
+
+
+### 未完成功能
+1. 遞歸函數支持(fact, fib, queen)
+2. 複雜的字符串操作
+3. 動態類型轉換
+4. list 相加
+
+## 6. 使用說明
+
+### 安裝步驟
+1. 安裝 OCaml 和必要的依賴
+2. 編譯項目源碼
+
+### 運行方式
+1. 編譯源文件:
+   ```bash
+   cd mini-python-ocaml
+   make
+   ```
+2. 運行生成的程序:
+   ```bash
+   cd ../tests-mini-python
+   ./test -3 ../mini-python-ocaml/mini-python
+   ```
+
+## 7. 測試案例
+### 執行結果
+```
+Part 2 (type checking)
+bad ..............
+good ..................................................
+Typing: 64/64 : 100%
+```
+```
+Part 3 (code generation)
+Compilation:
+Compilation: 38/48 : 79%
+Code behavior: 37/48 : 77%
+Expected output: 37/48 : 77%
+```
