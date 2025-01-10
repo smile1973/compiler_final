@@ -1,12 +1,6 @@
 
-print(1+2)
-print(1>2 and len(1))
-# x = list(range(7))
-# print(x[7])
-l = [1,2,3]
-for x in l:
-    l = []
-    print(x)
+
+print(len(list(range(7))))
 
 # x = 10
 # y = 10
