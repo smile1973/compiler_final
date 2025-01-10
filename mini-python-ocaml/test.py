@@ -17,12 +17,23 @@
 # print(e)
 # print(f)
 # print(g)
-x = [111,222,333]
+# x = [111,222,333]
+# print(x)
+# print(len(list(range(7))))
+# print(list(range(7)))
+
+# x = 42
+# print(x)
+# for x in [1,2,3]:
+#     print(x)
+# print(x)
+# l = list(range(7)) 
+# print(l)
+x = 42
 print(x)
-print(len(list(range(7))))
-print(list(range(7)))
-x = list(range(7))
-print(x[7])
+for x in [1,2,3]:
+    print(x)
+
 # print(x[1])
 # print(len([111,222,333]))
 # k = "fuck"

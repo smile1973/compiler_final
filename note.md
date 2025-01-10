@@ -25,40 +25,42 @@ Build-in Functions:
 
 ===========================================
 
-and or 的進階判斷
-list 
-range 
 []比較 
 str比較(怪怪的 可能是記憶體問題? print("b"<"c")會是false)
 
 ===========================================
-badmatrix -> 雙層list
-- compare_list1 -> list 比較
-compare_list2 -> list 比較 + 雙層list
-concat2 -> def
-concat3 -> def + list add
-- eval1 -> for i in list
-[skip] fact -> 
-[skip] fib ->
-list2 -> 雙層list取值
-loop1 -> def + if
-[skip] mandelbrot -> 
-none -> def
-pascal -> def
-primes -> def + for
+for i in list * 3
+list 比較 * 1
+雙層list * 4
+def * 8
+[02] badmatrix -> 雙層list
+[01] compare_list1 -> list 比較
+[02] compare_list2 -> list 比較 + 雙層list
+[03] concat2 -> def
+[03] concat3 -> def + list add
+[done] eval1 -> for i in list
+[skip] fact -> rec
+[skip] fib -> rec
+[02] list2 -> 雙層list
+[03] loop1 -> def + if
+[skip] mandelbrot -> ?
+[03] none -> def
+[03] pascal -> def
+[03] primes -> def + for
 [done] print_list1 -> list() + range()
-print_list3 -> 雙層list
-[skip] queen -> 
+[02] print_list3 -> 雙層list
+[skip] queen -> def + for
 [done] range1 -> list() + range()
 [done] range2 -> list() + range() + 取值
-- range3 -> list() + range() + for i in list
-str1 -> def
-- var3 -> for i in list
+[done] range3 -> list() + range() + for i in list
+[03] str1 -> def
+[done] var3 -> for i in list
 
-add1
-bool1
-bool2
-for1
-len1
-range1
+fail * 7
+[] add1
+[] bool1
+[] bool2
+[done] for1
+[] len1
+[] range1
 [done] range2 

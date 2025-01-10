@@ -517,6 +517,68 @@ let rec compile_stmt = function
     in
     compile_expr expr ++
     movq (reg rax) (ind ~ofs:cur_var rbp)
+  | TSfor (var, expr, body) ->
+    (* 為循環變量分配空間 *)
+    let var_offset = 
+      if Hashtbl.mem var_table var.v_name then
+        Hashtbl.find var_table var.v_name
+      else begin
+        let offset = !current_offset in
+        Hashtbl.add var_table var.v_name offset;
+        current_offset := !current_offset - 16;
+        offset
+      end
+    in
+
+    (* 編譯 list 表達式並保存到棧上 *)
+    compile_expr expr ++
+    pushq (reg rax) ++  (* 保存 list 指針 *)
+
+    (* 保存要用到的暫存器 *)
+    pushq (reg r12) ++  (* 循環計數器 *)
+    pushq (reg r13) ++  (* list長度 *)
+    
+    (* 初始化計數器 *)
+    xorq (reg r12) (reg r12) ++
+    
+    (* 取得list的長度 *)
+    popq r13 ++          (* 取回list指針到r13 *)
+    movq (ind ~ofs:8 rax) (reg r13) ++  (* 取得長度到r13 *)
+    pushq (reg rax) ++   (* 重新保存list指針 *)
+
+    (* 循環開始標籤 *)
+    let loop_start = fresh_unique_label () in
+    let loop_end = fresh_unique_label () in
+    label loop_start ++
+
+    (* 檢查是否完成循環 *)
+    cmpq (reg r13) (reg r12) ++
+    je loop_end ++
+
+    (* 取出當前元素 *)
+    popq rax ++
+    movq (reg r12) (reg rcx) ++         (* 當前索引 *)
+    imulq (imm 16) (reg rcx) ++         (* 計算偏移 *)
+    addq (imm 16) (reg rcx) ++          (* 加上list頭部偏移 *)
+    movq (ind rax ~index:rcx) (reg rdx) ++ (* 取得元素 *)
+    pushq (reg rax) ++                  (* 保存list指針 *)
+
+    (* 將當前元素存入循環變量 *)
+    movq (reg rdx) (ind ~ofs:var_offset rbp) ++
+
+    (* 編譯循環體 *)
+    compile_stmt body ++
+
+    (* 增加計數器並繼續循環 *)
+    incq (reg r12) ++
+    jmp loop_start ++
+
+    (* 循環結束 *)
+    label loop_end ++
+    popq rax ++
+    popq r13 ++
+    popq r12
+
   | TSblock stmts -> 
       List.fold_left (fun code stmt -> code ++ compile_stmt stmt) nop stmts
   | _ -> nop

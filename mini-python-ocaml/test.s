@@ -117,19 +117,22 @@ main:
 	movq $16, %rdi
 	call my_malloc
 	movq $2, 0(%rax)
-	movq $7, 8(%rax)
-	pushq %rax
-	movq 8(%rax), %rbx
-	popq %rax
-	movq $128, %rdi
+	movq $42, 8(%rax)
+	movq %rax, -64(%rbp)
+	movq -64(%rbp), %rax
+	movq %rax, %rdi
+	call print_value
+	movq $10, %rdi
+	call putchar
+	movq $64, %rdi
 	call my_malloc
 	movq $4, 0(%rax)
-	movq $7, 8(%rax)
+	movq $3, 8(%rax)
 	pushq %rax
 	movq $16, %rdi
 	call my_malloc
 	movq $2, 0(%rax)
-	movq $0, 8(%rax)
+	movq $1, 8(%rax)
 	pushq %rax
 	movq 0(%rsp), %rcx
 	popq %rax
@@ -139,7 +142,7 @@ main:
 	movq $16, %rdi
 	call my_malloc
 	movq $2, 0(%rax)
-	movq $1, 8(%rax)
+	movq $2, 8(%rax)
 	pushq %rax
 	movq 0(%rsp), %rcx
 	popq %rax
@@ -149,68 +152,42 @@ main:
 	movq $16, %rdi
 	call my_malloc
 	movq $2, 0(%rax)
-	movq $2, 8(%rax)
+	movq $3, 8(%rax)
 	pushq %rax
 	movq 0(%rsp), %rcx
 	popq %rax
 	popq %rdx
 	movq %rcx, 48(%rdx)
 	pushq %rdx
-	movq $16, %rdi
-	call my_malloc
-	movq $2, 0(%rax)
-	movq $3, 8(%rax)
+	popq %rax
 	pushq %rax
-	movq 0(%rsp), %rcx
-	popq %rax
-	popq %rdx
-	movq %rcx, 64(%rdx)
-	pushq %rdx
-	movq $16, %rdi
-	call my_malloc
-	movq $2, 0(%rax)
-	movq $4, 8(%rax)
+	pushq %r12
+	pushq %r13
+	xorq %r12, %r12
+	popq %r13
+	movq 8(%rax), %r13
 	pushq %rax
-	movq 0(%rsp), %rcx
+.LC0:
+	cmpq %r13, %r12
+	je .LC1
 	popq %rax
-	popq %rdx
-	movq %rcx, 80(%rdx)
-	pushq %rdx
-	movq $16, %rdi
-	call my_malloc
-	movq $2, 0(%rax)
-	movq $5, 8(%rax)
-	pushq %rax
-	movq 0(%rsp), %rcx
-	popq %rax
-	popq %rdx
-	movq %rcx, 96(%rdx)
-	pushq %rdx
-	movq $16, %rdi
-	call my_malloc
-	movq $2, 0(%rax)
-	movq $6, 8(%rax)
-	pushq %rax
-	movq 0(%rsp), %rcx
-	popq %rax
-	popq %rdx
-	movq %rcx, 112(%rdx)
-	pushq %rdx
-	popq %rax
-	movq %rax, -64(%rbp)
-	movq $16, %rdi
-	call my_malloc
-	movq $2, 0(%rax)
-	movq $7, 8(%rax)
-	movq 8(%rax), %rcx
+	movq %r12, %rcx
 	imulq $16, %rcx
 	addq $16, %rcx
-	movq -64(%rbp), %rdx
-	movq 0(%rdx,%rcx,1), %rax
+	movq 0(%rax,%rcx,1), %rdx
+	pushq %rax
+	movq %rdx, -64(%rbp)
+	movq -64(%rbp), %rax
 	movq %rax, %rdi
 	call print_value
 	movq $10, %rdi
 	call putchar
+	incq %r12
+	jmp .LC0
+.LC1:
+	popq %rax
+	popq %r13
+	popq %r12
 	movq $0, %rax
 	movq %rbp, %rsp
 	popq %rbp
