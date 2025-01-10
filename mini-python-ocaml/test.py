@@ -1,7 +1,11 @@
 
 
 print(len(list(range(7))))
-
+# def foo():
+#     x = 1
+# print(foo())
+# print(foo() == foo())
+# print(foo() != foo())
 # x = 10
 # y = 10
 # a = 10

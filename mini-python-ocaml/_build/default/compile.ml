@@ -612,33 +612,29 @@ let rec compile_expr = function
         | Bor -> compile_or e1 e2
       end
   | TEcall (fn, [arg]) when fn.fn_name = "len" ->
-    (* 先編譯參數 *)
-    compile_expr arg ++
-    pushq (reg rax) ++                 (* 保存結果 *)
+    compile_expr arg ++         (* 編譯參數，結果在 rax *)
+    pushq (reg rax) ++         (* 保存參數指針 *)
+    movq (ind ~ofs:0 rax) (reg rdx) ++  (* 檢查類型 *)
     
-    (* 檢查參數類型 *)
-    movq (ind ~ofs:0 rax) (reg rdx) ++
-    cmpq (imm 4) (reg rdx) ++          (* 是否為list *)
-    je "len_valid" ++
-    cmpq (imm 3) (reg rdx) ++          (* 是否為string *)
-    jne "error_label" ++               (* 都不是則跳到錯誤處理 *)
+    (* 檢查類型標籤 *)
+    cmpq (imm 3) (reg rdx) ++  (* 是字串? *)
+    je "handle_len" ++
+    cmpq (imm 4) (reg rdx) ++  (* 是列表? *)
+    je "handle_len" ++
+    jmp "error_label" ++       (* 其他類型，跳到錯誤處理 *)
     
-    (* 處理有效的len調用 *)
-    label "len_valid" ++
-    popq rax ++                        (* 恢復參數 *)
-    pushq (reg rax) ++                 (* 保存參數 *)
+    (* 處理長度 *)
+    label "handle_len" ++
+    popq rax ++                (* 取回列表/字串指針 *)
+    movq (ind ~ofs:8 rax) (reg rsi) ++  (* 取得長度值 *)
     
-    (* 分配空間給結果 *)
+    (* 創建新的整數物件 *)
+    pushq (reg rsi) ++         (* 保存長度值 *)
     movq (imm 16) (reg rdi) ++
     call "my_malloc" ++
-    
-    (* 設置結果為整數類型 *)
-    movq (imm 2) (ind ~ofs:0 rax) ++
-    
-    (* 從參數取得長度並設置 *)
-    popq rcx ++
-    movq (ind ~ofs:8 rcx) (reg rdx) ++
-    movq (reg rdx) (ind ~ofs:8 rax)
+    popq rsi ++                (* 取回長度值 *)
+    movq (imm 2) (ind ~ofs:0 rax) ++  (* 設置類型為整數 *)
+    movq (reg rsi) (ind ~ofs:8 rax)   (* 存入長度值 *)
   | TEvar var ->
     movq (ind ~ofs:var.v_ofs rbp) (!%rdi)
   | TEget (lst, index) ->
@@ -794,17 +790,12 @@ let rec compile_stmt = function
           movq (imm 10) (!%rdi) ++
           call "putchar"
         end
-      | TEcall (fn, arg) when fn.fn_name = "len" ->
-        begin match e with
-        | TElist _ | TEcst (Cstring _) ->
-          compile_expr e ++
-          movq (reg rax) (reg rdi) ++
-          call "print_value" ++
-          movq (imm 10) (!%rdi) ++
-          call "putchar"
-        | _ ->
-          jmp "error_label" (* Jump to error if len is called on invalid type *)
-        end
+      | TEcall (fn, args) when fn.fn_name = "len" ->
+        compile_expr e ++     (* 編譯整個表達式 *)
+        movq (reg rax) (reg rdi) ++
+        call "print_value" ++
+        movq (imm 10) (!%rdi) ++
+        call "putchar"
       | TErange _ ->
         compile_expr e ++
         movq (reg rax) (reg rdi) ++

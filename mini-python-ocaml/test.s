@@ -115,7 +115,114 @@ main:
 	pushq %rbp
 	movq %rsp, %rbp
 	subq $1024, %rsp
+	movq $16, %rdi
+	call my_malloc
+	movq $2, 0(%rax)
+	movq $7, 8(%rax)
+	pushq %rax
+	movq 0(%rax), %rcx
+	cmpq $2, %rcx
+	jne error_label
+	movq 8(%rax), %rbx
+	cmpq $0, %rbx
+	jle error_label
+	popq %rax
+	movq $128, %rdi
+	call my_malloc
+	movq $4, 0(%rax)
+	movq $7, 8(%rax)
+	pushq %rax
+	movq $16, %rdi
+	call my_malloc
+	movq $2, 0(%rax)
+	movq $0, 8(%rax)
+	pushq %rax
+	movq 0(%rsp), %rcx
+	popq %rax
+	popq %rdx
+	movq %rcx, 16(%rdx)
+	pushq %rdx
+	movq $16, %rdi
+	call my_malloc
+	movq $2, 0(%rax)
+	movq $1, 8(%rax)
+	pushq %rax
+	movq 0(%rsp), %rcx
+	popq %rax
+	popq %rdx
+	movq %rcx, 32(%rdx)
+	pushq %rdx
+	movq $16, %rdi
+	call my_malloc
+	movq $2, 0(%rax)
+	movq $2, 8(%rax)
+	pushq %rax
+	movq 0(%rsp), %rcx
+	popq %rax
+	popq %rdx
+	movq %rcx, 48(%rdx)
+	pushq %rdx
+	movq $16, %rdi
+	call my_malloc
+	movq $2, 0(%rax)
+	movq $3, 8(%rax)
+	pushq %rax
+	movq 0(%rsp), %rcx
+	popq %rax
+	popq %rdx
+	movq %rcx, 64(%rdx)
+	pushq %rdx
+	movq $16, %rdi
+	call my_malloc
+	movq $2, 0(%rax)
+	movq $4, 8(%rax)
+	pushq %rax
+	movq 0(%rsp), %rcx
+	popq %rax
+	popq %rdx
+	movq %rcx, 80(%rdx)
+	pushq %rdx
+	movq $16, %rdi
+	call my_malloc
+	movq $2, 0(%rax)
+	movq $5, 8(%rax)
+	pushq %rax
+	movq 0(%rsp), %rcx
+	popq %rax
+	popq %rdx
+	movq %rcx, 96(%rdx)
+	pushq %rdx
+	movq $16, %rdi
+	call my_malloc
+	movq $2, 0(%rax)
+	movq $6, 8(%rax)
+	pushq %rax
+	movq 0(%rsp), %rcx
+	popq %rax
+	popq %rdx
+	movq %rcx, 112(%rdx)
+	pushq %rdx
+	popq %rax
+	pushq %rax
+	movq 0(%rax), %rdx
+	cmpq $3, %rdx
+	je handle_len
+	cmpq $4, %rdx
+	je handle_len
 	jmp error_label
+handle_len:
+	popq %rax
+	movq 8(%rax), %rsi
+	pushq %rsi
+	movq $16, %rdi
+	call my_malloc
+	popq %rsi
+	movq $2, 0(%rax)
+	movq %rsi, 8(%rax)
+	movq %rax, %rdi
+	call print_value
+	movq $10, %rdi
+	call putchar
 	movq $0, %rax
 	movq %rbp, %rsp
 	popq %rbp
