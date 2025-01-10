@@ -1,4 +1,13 @@
 
+print(1+2)
+print(1>2 and len(1))
+# x = list(range(7))
+# print(x[7])
+l = [1,2,3]
+for x in l:
+    l = []
+    print(x)
+
 # x = 10
 # y = 10
 # a = 10
@@ -29,10 +38,29 @@
 # print(x)
 # l = list(range(7)) 
 # print(l)
-x = 42
-print(x)
-for x in [1,2,3]:
-    print(x)
+# x = 42
+# print(x)
+# for x in [1,2,3]:
+#     print(x)
+
+# print([]     == [])
+# print([]     <  [1])
+# print([1]    != [2])
+# print([2, 1] <  [4, 1])
+# print([4]    <= [4, 6])
+# # false
+# print([5]    <= [])
+
+# print([1, [2,3], 4] != [1, 2, 3])
+# print([1, [2,3], 4] == [1, [2,3], 3])
+# print([1, [2,3], 4] == [1, [2,3], 4])
+# x = 1
+# print([x,x,x] == [x,[x],x])
+# print("=================")
+# x = [0,[0,1,42],1]
+# print(x[1][2])
+# print("=================")
+# print([1, [2, 3], 4]) 
 
 # print(x[1])
 # print(len([111,222,333]))

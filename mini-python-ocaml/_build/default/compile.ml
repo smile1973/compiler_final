@@ -8,7 +8,17 @@ let string_table : (string, string) Hashtbl.t = Hashtbl.create 64
 let function_table : (string, fn) Hashtbl.t = Hashtbl.create 16
 let var_table : (string, int) Hashtbl.t = Hashtbl.create 64
 let current_offset = ref (-64)
-
+let error_handler =
+  label "error_label" ++
+  movq (imm 0) (reg rax) ++  (* printf需要rax=0 *)
+  leaq (lab ".LCerror") (rdi) ++
+  call "printf" ++
+  (* 印出換行 *)
+  movq (imm 10) (reg rdi) ++
+  call "putchar" ++
+  (* 回傳錯誤代碼1 *)
+  movq (imm 1) (reg rdi) ++
+  call "exit"
 (* 堆分配包裝函數保持不變 *)
 let malloc_wrapper = 
   let code = [
@@ -65,8 +75,9 @@ let print_value_wrapper =
 
     pushq (reg r12) ++    (* 保存 r12 用於儲存長度 *)
     pushq (reg r13) ++    (* 保存 r13 用於儲存當前索引 *)
-
     pushq (reg rbx) ++
+
+    (* print [ *)
     leaq (lab ".LCstart") (rdi) ++
     call "printf" ++
 
@@ -99,6 +110,8 @@ let print_value_wrapper =
     label "print_list_end" ++
     leaq (lab ".LCend") (rdi) ++
     call "printf" ++
+    
+    popq rbx ++
     popq r13 ++
     popq r12 ++
 
@@ -376,21 +389,174 @@ let rec compile_expr = function
       popq rdx ++                          (* 恢復結果 *)
       movq (imm 2) (ind ~ofs:0 rax) ++     (* 設置類型標籤為整數 *)
       movq (reg rdx) (ind ~ofs:8 rax) in    
-    begin match op with
-    | Badd -> compile_binary_op "add" e1 e2
-    | Bsub -> compile_binary_op "sub" e1 e2
-    | Bmul -> compile_binary_op "mul" e1 e2
-    | Bdiv -> compile_binary_op "div" e1 e2
-    | Bmod -> compile_binary_op "mod" e1 e2
-    | Beq -> compile_compare "eq" e1 e2
-    | Bneq -> compile_compare "neq" e1 e2
-    | Bgt -> compile_compare "gt" e1 e2
-    | Bge -> compile_compare "ge" e1 e2
-    | Blt -> compile_compare "lt" e1 e2
-    | Ble -> compile_compare "le" e1 e2
-    | Band -> compile_and e1 e2
-    | Bor -> compile_or e1 e2
-    end
+    let compile_list_compare op e1 e2 =
+      let rec_label = fresh_unique_label () in
+      let exit_label = fresh_unique_label () in
+      let true_label = fresh_unique_label () in
+      let false_label = fresh_unique_label () in
+        
+      (* 編譯兩個list並保存 *)
+      compile_expr e1 ++
+      pushq (reg rax) ++
+      compile_expr e2 ++
+      movq (reg rax) (reg rcx) ++
+      popq rax ++
+      
+      (* 檢查兩者是否為list *)
+      movq (ind ~ofs:0 rax) (reg r8) ++
+      movq (ind ~ofs:0 rcx) (reg r9) ++
+      cmpq (imm 4) (reg r8) ++
+      jne "error" ++
+      cmpq (imm 4) (reg r9) ++
+      jne "error" ++
+      
+      (* 保存長度 *)
+      movq (ind ~ofs:8 rax) (reg r8) ++  (* len1 *)
+      movq (ind ~ofs:8 rcx) (reg r9) ++  (* len2 *)
+      pushq (reg rax) ++  (* list1 *)
+      pushq (reg rcx) ++  (* list2 *)
+      
+      (* 基於操作符的比較邏輯 *)
+      (match op with
+      | "eq" ->  (* == *)
+        cmpq (reg r8) (reg r9) ++
+        jne false_label ++  (* 長度不同，直接返回 false *)
+        
+        (* 長度相等，比較每個元素 *)
+        popq rcx ++        (* 重新載入 list2 *)
+        popq rax ++        (* 重新載入 list1 *)
+        xorq (reg rdx) (reg rdx) ++  (* 索引 = 0 *)
+        
+        label rec_label ++
+        cmpq (reg r8) (reg rdx) ++
+        je true_label ++             (* 都遍歷完了且相等，返回 true *)
+        
+        (* 比較當前元素 *)
+        movq (reg rdx) (reg r10) ++
+        imulq (imm 16) (reg r10) ++
+        addq (imm 16) (reg r10) ++
+        movq (ind ~ofs:0 rax ~index:r10) (reg r11) ++
+        movq (ind ~ofs:0 rcx ~index:r10) (reg r12) ++
+        movq (ind ~ofs:8 r11) (reg r11) ++  (* 取出值 *)
+        movq (ind ~ofs:8 r12) (reg r12) ++  (* 取出值 *)
+        cmpq (reg r11) (reg r12) ++
+        jne false_label ++           (* 元素不同，返回 false *)
+        
+        incq (reg rdx) ++
+        jmp rec_label
+      | "lt" -> (* < *)
+        (* 比較每個元素 *)
+        popq rcx ++        (* 重新載入 list2 *)
+        popq rax ++        (* 重新載入 list1 *)
+        xorq (reg rdx) (reg rdx) ++  (* index = 0 *)
+        
+        label rec_label ++
+        (* 如果到達任一list的結尾 *)
+        cmpq (reg r8) (reg rdx) ++
+        je true_label ++             (* list1更短，返回true *)
+        cmpq (reg r9) (reg rdx) ++
+        je false_label ++            (* list2更短，返回false *)
+        
+        (* 比較當前元素 *)
+        movq (reg rdx) (reg r10) ++
+        imulq (imm 16) (reg r10) ++
+        addq (imm 16) (reg r10) ++
+        movq (ind ~ofs:0 rax ~index:r10) (reg r11) ++
+        movq (ind ~ofs:0 rcx ~index:r10) (reg r12) ++
+        movq (ind ~ofs:8 r11) (reg r11) ++  (* 取出值 *)
+        movq (ind ~ofs:8 r12) (reg r12) ++
+        
+        (* 如果元素不相等 *)
+        cmpq (reg r12) (reg r11) ++
+        jl true_label ++   (* list1[i] < list2[i] *)
+        jg false_label ++  (* list1[i] > list2[i] *)
+        
+        (* 元素相等，繼續比較 *)
+        incq (reg rdx) ++
+        jmp rec_label
+      | "le" -> (* <= *)
+        (* 比較每個元素 *)
+        popq rcx ++        (* 重新載入 list2 *)
+        popq rax ++        (* 重新載入 list1 *)
+        xorq (reg rdx) (reg rdx) ++  (* index = 0 *)
+        
+        label rec_label ++
+        (* 如果到達任一list的結尾 *)
+        cmpq (reg r8) (reg rdx) ++
+        je true_label ++             (* list1更短或等長，返回true *)
+        cmpq (reg r9) (reg rdx) ++
+        je false_label ++            (* list2更短，返回false *)
+        
+        (* 比較當前元素 *)
+        movq (reg rdx) (reg r10) ++
+        imulq (imm 16) (reg r10) ++
+        addq (imm 16) (reg r10) ++
+        movq (ind ~ofs:0 rax ~index:r10) (reg r11) ++
+        movq (ind ~ofs:0 rcx ~index:r10) (reg r12) ++
+        movq (ind ~ofs:8 r11) (reg r11) ++
+        movq (ind ~ofs:8 r12) (reg r12) ++
+        
+        (* 如果元素不相等 *)
+        cmpq (reg r11) (reg r12) ++
+        jl true_label ++   (* list1[i] < list2[i] *)
+        jg false_label ++  (* list1[i] > list2[i] *)
+        
+        (* 元素相等，繼續比較 *)
+        incq (reg rdx) ++
+        jmp rec_label
+      | _ -> nop) ++
+      (* 處理比較結果 *)
+      label true_label ++
+      movq (imm 1) (reg rax) ++
+      jmp exit_label ++
+
+      (* 處理比較結果 *)
+      label false_label ++
+      movq (imm 0) (reg rax) ++
+
+      (* 創建布林值對象 *)
+      label exit_label ++
+      
+      (* 清理堆疊並將結果轉換為bool類型 *)
+      pushq (reg rax) ++              (* 保存比較結果 *)
+      movq (imm 16) (reg rdi) ++      (* 分配空間給布林值 *)
+      call "my_malloc" ++
+      popq rdx ++                     (* 恢復比較結果 *)
+      movq (imm 1) (ind ~ofs:0 rax) ++ (* 設置類型標籤為布林(1) *)
+      movq (reg rdx) (ind ~ofs:8 rax) in  (* 設置布林值 *)
+    let is_list = function
+      | TElist _ | TEvar _ | TErange _ -> true
+      | _ -> false
+    in
+    if is_list e1 || is_list e2 then
+      match op with
+      | Beq -> compile_list_compare "eq" e1 e2
+      | Bneq -> 
+          compile_list_compare "eq" e1 e2 ++
+          movq (ind ~ofs:8 rax) (reg rdx) ++
+          xorq (imm 1) (reg rdx) ++
+          movq (reg rdx) (ind ~ofs:8 rax)
+      | Blt -> compile_list_compare "lt" e1 e2
+      | Ble -> compile_list_compare "le" e1 e2
+      | Bgt -> compile_list_compare "lt" e2 e1
+      | Bge -> compile_list_compare "le" e2 e1
+      | _ -> failwith "Unsupported operation for lists"
+    else
+      begin match op with
+        | Badd -> compile_binary_op "add" e1 e2
+        | Bsub -> compile_binary_op "sub" e1 e2
+        | Bmul -> compile_binary_op "mul" e1 e2
+        | Bdiv -> compile_binary_op "div" e1 e2
+        | Bmod -> compile_binary_op "mod" e1 e2
+        | Beq -> compile_compare "eq" e1 e2
+        | Bneq -> compile_compare "neq" e1 e2
+        | Bgt -> compile_compare "gt" e1 e2
+        | Bge -> compile_compare "ge" e1 e2
+        | Blt -> compile_compare "lt" e1 e2
+        | Ble -> compile_compare "le" e1 e2
+        | Band -> compile_and e1 e2
+        | Bor -> compile_or e1 e2
+      end
   | TEcall (fn, [arg]) when fn.fn_name = "len" ->
     compile_expr arg ++
     pushq (reg rax) ++
@@ -410,20 +576,59 @@ let rec compile_expr = function
   | TEget (lst, index) ->
     (match lst with
     | TEvar var -> 
-        let list_offset = Hashtbl.find var_table var.v_name in
-        
-        (* 編譯索引表達式並獲取值 *)
-        compile_expr index ++
-        movq (ind ~ofs:8 rax) (reg rcx) ++  (* 取出索引值到rcx *)
-        
-        (* 計算要獲取的元素位置 *)
-        imulq (imm 16) (reg rcx) ++      (* 索引 * 16(每個元素大小) *)
-        addq (imm 16) (reg rcx) ++       (* 加上基本偏移16 *)
-        
-        (* 從list中取出對應位置的元素 *)
-        movq (ind ~ofs:list_offset rbp) (reg rdx) ++  (* 取得list起始位置 *)
-        movq (ind rdx ~index:rcx) (reg rax)
-    | _ -> failwith "Unsupported expression type")
+      let list_offset = Hashtbl.find var_table var.v_name in
+      
+      (* 編譯索引表達式並獲取值 *)
+      compile_expr index ++
+      movq (ind ~ofs:8 rax) (reg rcx) ++  (* 取出索引值到rcx *)
+      
+      (* 計算要獲取的元素位置 *)
+      imulq (imm 16) (reg rcx) ++      (* 索引 * 16(每個元素大小) *)
+      addq (imm 16) (reg rcx) ++       (* 加上基本偏移16 *)
+      
+      (* 從list中取出對應位置的元素 *)
+      movq (ind ~ofs:list_offset rbp) (reg rdx) ++  (* 取得list起始位置 *)
+      movq (ind rdx ~index:rcx) (reg rax)
+    
+    | TEget(inner_lst, inner_idx) ->
+      (* 處理巢狀列表存取,如 x[1][2] *)
+      compile_expr inner_lst ++     (* 先取得內層列表 *)
+      pushq (reg rax) ++           (* 保存內層列表位址 *)
+      
+      (* 編譯內層索引 *)
+      compile_expr inner_idx ++
+      movq (ind ~ofs:8 rax) (reg rcx) ++  (* 取出內層索引值 *)
+      imulq (imm 16) (reg rcx) ++         (* 計算內層偏移 *)
+      addq (imm 16) (reg rcx) ++
+      
+      (* 取得內層元素 *)
+      popq rdx ++                         (* 恢復列表位址 *)
+      movq (ind rdx ~index:rcx) (reg rax) ++
+      
+      (* 現在rax中是內層列表,繼續處理外層索引 *)
+      pushq (reg rax) ++                  (* 保存內層元素 *)
+      
+      (* 編譯外層索引 *)
+      compile_expr index ++
+      movq (ind ~ofs:8 rax) (reg rcx) ++
+      imulq (imm 16) (reg rcx) ++
+      addq (imm 16) (reg rcx) ++
+      
+      (* 取得最終元素 *)
+      popq rdx ++
+      movq (ind rdx ~index:rcx) (reg rax)
+  | _ ->  
+      (* 直接存取列表字面值,如 [1,[2,3],4][1] *)
+      compile_expr lst ++           (* 編譯整個列表 *)
+      pushq (reg rax) ++           (* 保存列表位址 *)
+      
+      compile_expr index ++
+      movq (ind ~ofs:8 rax) (reg rcx) ++
+      imulq (imm 16) (reg rcx) ++
+      addq (imm 16) (reg rcx) ++
+      
+      popq rdx ++
+      movq (ind rdx ~index:rcx) (reg rax))
   | TErange n ->
     (* 編譯範圍大小參數 *)
     compile_expr n ++
@@ -473,8 +678,15 @@ let rec compile_stmt = function
           call "print_value" ++
           movq (imm 10) (!%rdi) ++
           call "putchar"
-        | _ ->
+        | Badd ->
           (* 處理其他算術運算 *)
+          test_invalid_operation e1 e2 ++
+          compile_expr e ++
+          movq (reg rax) (reg rdi) ++
+          call "print_value" ++
+          movq (imm 10) (!%rdi) ++
+          call "putchar"
+        | _ -> 
           compile_expr e ++
           movq (reg rax) (reg rdi) ++
           call "print_value" ++
@@ -482,11 +694,16 @@ let rec compile_stmt = function
           call "putchar"
         end
       | TEcall (fn, arg) when fn.fn_name = "len" ->
-        compile_expr e ++
-        movq (reg rax) (reg rdi) ++
-        call "print_value" ++
-        movq (imm 10) (!%rdi) ++
-        call "putchar"
+        begin match e with
+        | TElist _ | TEcst (Cstring _) ->
+          compile_expr e ++
+          movq (reg rax) (reg rdi) ++
+          call "print_value" ++
+          movq (imm 10) (!%rdi) ++
+          call "putchar"
+        | _ ->
+          jmp "error_label" (* Jump to error if len is called on invalid type *)
+        end
       | TErange _ ->
         compile_expr e ++
         movq (reg rax) (reg rdi) ++
@@ -578,10 +795,14 @@ let rec compile_stmt = function
     popq rax ++
     popq r13 ++
     popq r12
-
   | TSblock stmts -> 
       List.fold_left (fun code stmt -> code ++ compile_stmt stmt) nop stmts
   | _ -> nop
+and test_invalid_operation e1 e2 =
+  match e1, e2 with
+  | TEcst (Cint _), TEcst (Cint _) -> nop (* Valid operation *)
+  | TEcst (Cstring _), TEcst (Cstring _) -> nop (* String concatenation *)
+  | _, _ -> jmp "error_label" (* Invalid operation, jump to error *)
 
 (* 編譯函數 *)
 let compile_fun (fn, body) =
@@ -629,7 +850,8 @@ let file ?debug:(b=false) (p: Ast.tfile) : X86_64.program =
             print_wrap2 ++           (* bool print *)
             print_wrap3 ++           (* string print *)
             print_value_wrapper ++   (* general print *)
-            code;
+            code ++
+            error_handler;
     data = string_data ++
            string_data2;  (* 格式字符串 *)
   }

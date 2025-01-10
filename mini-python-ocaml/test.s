@@ -102,6 +102,7 @@ print_list_element:
 print_list_end:
 	leaq .LCend, %rdi
 	call printf
+	popq %rbx
 	popq %r13
 	popq %r12
 print_value_end:
@@ -117,9 +118,78 @@ main:
 	movq $16, %rdi
 	call my_malloc
 	movq $2, 0(%rax)
-	movq $42, 8(%rax)
-	movq %rax, -64(%rbp)
-	movq -64(%rbp), %rax
+	movq $1, 8(%rax)
+	pushq %rax
+	movq $16, %rdi
+	call my_malloc
+	movq $2, 0(%rax)
+	movq $2, 8(%rax)
+	movq %rax, %rcx
+	popq %rax
+	movq 8(%rax), %rax
+	movq 8(%rcx), %rcx
+	addq %rcx, %rax
+	pushq %rax
+	movq $16, %rdi
+	call my_malloc
+	popq %rdx
+	movq $2, 0(%rax)
+	movq %rdx, 8(%rax)
+	movq %rax, %rdi
+	call print_value
+	movq $10, %rdi
+	call putchar
+	movq $16, %rdi
+	call my_malloc
+	movq $2, 0(%rax)
+	movq $1, 8(%rax)
+	pushq %rax
+	movq $16, %rdi
+	call my_malloc
+	movq $2, 0(%rax)
+	movq $2, 8(%rax)
+	movq %rax, %rcx
+	popq %rax
+	movq 8(%rax), %rax
+	movq 8(%rcx), %rcx
+	cmpq %rcx, %rax
+	setg %al
+	movzbq %al, %rax
+	pushq %rax
+	movq $16, %rdi
+	call my_malloc
+	popq %rdx
+	movq $1, 0(%rax)
+	movq %rdx, 8(%rax)
+	pushq %rax
+	movq $16, %rdi
+	call my_malloc
+	movq $2, 0(%rax)
+	movq $1, 8(%rax)
+	pushq %rax
+	movq 0(%rax), %rdx
+	movq $16, %rdi
+	call my_malloc
+	movq $2, 0(%rax)
+	popq %rcx
+	cmpq $3, %rdx
+	movq 8(%rcx), %rdx
+	movq %rdx, 8(%rax)
+	movq %rax, %rcx
+	popq %rax
+	movq 8(%rax), %rax
+	movq 8(%rcx), %rcx
+	cmpq $0, %rax
+	je .LC0
+	andq %rcx, %rax
+	jmp .LC0
+.LC0:
+	pushq %rax
+	movq $16, %rdi
+	call my_malloc
+	popq %rdx
+	movq $1, 0(%rax)
+	movq %rdx, 8(%rax)
 	movq %rax, %rdi
 	call print_value
 	movq $10, %rdi
@@ -160,6 +230,8 @@ main:
 	movq %rcx, 48(%rdx)
 	pushq %rdx
 	popq %rax
+	movq %rax, -64(%rbp)
+	movq 0(%rbp), %rdi
 	pushq %rax
 	pushq %r12
 	pushq %r13
@@ -167,24 +239,31 @@ main:
 	popq %r13
 	movq 8(%rax), %r13
 	pushq %rax
-.LC0:
+.LC1:
 	cmpq %r13, %r12
-	je .LC1
+	je .LC2
 	popq %rax
 	movq %r12, %rcx
 	imulq $16, %rcx
 	addq $16, %rcx
 	movq 0(%rax,%rcx,1), %rdx
 	pushq %rax
-	movq %rdx, -64(%rbp)
-	movq -64(%rbp), %rax
+	movq %rdx, -80(%rbp)
+	movq $16, %rdi
+	call my_malloc
+	movq $4, 0(%rax)
+	movq $0, 8(%rax)
+	pushq %rax
+	popq %rax
+	movq %rax, -64(%rbp)
+	movq -80(%rbp), %rax
 	movq %rax, %rdi
 	call print_value
 	movq $10, %rdi
 	call putchar
 	incq %r12
-	jmp .LC0
-.LC1:
+	jmp .LC1
+.LC2:
 	popq %rax
 	popq %r13
 	popq %r12
@@ -192,6 +271,14 @@ main:
 	movq %rbp, %rsp
 	popq %rbp
 	ret
+error_label:
+	movq $0, %rax
+	leaq .LCerror, %rdi
+	call printf
+	movq $10, %rdi
+	call putchar
+	movq $1, %rdi
+	call exit
 	.data
 .LCtrue:
 	.string "True"
