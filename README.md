@@ -1,4 +1,4 @@
-# Snakecharmer: Mini Python 編譯器項目
+# Mini Python 編譯器項目
 > 將 Python 代碼優雅地轉化為 x86-64 彙編
 
 ## 團隊成員
@@ -9,7 +9,7 @@
 ## 1. 項目概述
 
 ### 簡介
-Snakecharmer 是一個精巧的 Mini Python 編譯器，它能夠將 Python 的一個子集優雅地"馴服"為 x86-64 彙編代碼。就像馴蛇人能夠掌控蛇的動作，我們的編譯器也能夠精確地控制和轉換 Python 代碼的執行流程。
+一個簡易的 Mini Python 編譯器，它能夠將 Python 轉換為 x86-64 彙編代碼。
 
 ### 完成度總結
 - 基本數據類型: int, bool, string, list ✓
